@@ -3,7 +3,8 @@ import { change, today, v, egp, piasters, checked, nowStamp, findBy, miscSource,
 import { addAccount, postEntry, renameAccount, toPiasters } from '../ledger.js';
 import { createGoal, editGoal, depositGoal, withdrawGoal, applySplit } from '../moves.js';
 import { formatMoney } from '../format.js';
-import { rememberPlace } from '../places.js';
+import { rememberPlace, checkSpend } from '../places.js';
+import { buyUnits, sellUnits } from '../units.js';
 
 const dateOr = (id) => v(id) || today();
 let doneMsg = '';
@@ -59,9 +60,11 @@ export const placeActions = {
     const safeId = v('g-safe');
     return change((st) => {
       if (!st.d.safes.some((s) => s.id === safeId)) throw new Error('اختار الخزنة');
+      const unit = v('g-holds') === 'unit' ? String(v('g-unit')).trim() : '';
+      if (v('g-holds') === 'unit' && unit.length < 2) throw new Error('اكتب اسم الوحدة (مثلا: جرام دهب)');
       st.d.goals.push(createGoal(st.book, {
-        id: nowStamp('g'), name: v('g-name'), note: v('g-note'), photo, targetEgp: egp('g-target'),
-        kind: v('g-kind') === 'saving' ? 'saving' : 'other', safeId,
+        id: nowStamp('g'), name: v('g-name'), note: v('g-note'), photo, safeId, unit,
+        targetEgp: unit ? 0 : egp('g-target'), targetQty: unit ? egp('g-target') : 0,
       }));
     }, 'safe', { id: safeId }, '✓ اتضاف الدرج');
   },
@@ -69,7 +72,7 @@ export const placeActions = {
     const photo = await photoIn('g-photo');
     return change((st) => {
       const g = findBy(st.d.goals, p.id, 'الدرج');
-      editGoal(st.book, g, { name: v('g-name'), targetEgp: egp('g-target'), note: v('g-note'), safeId: v('g-safe'), kind: v('g-kind') });
+      editGoal(st.book, g, { name: v('g-name'), targetEgp: egp('g-target'), targetQty: egp('g-target'), note: v('g-note'), safeId: v('g-safe') });
       if (photo) g.photo = photo;
     }, 'drawer', { id: p.id });
   },
@@ -86,6 +89,31 @@ export const placeActions = {
     withdrawGoal(st.book, g, { placeId: v('place'), amountEgp: egp('amount'), date: dateOr('date'), note: v('note'), entryId });
     withPhoto(st, entryId);
   }, 'drawer', { id: p.id }, '✓ اتسحب من الدرج'),
+
+  // A drawer that holds units (gold, dollars...): buying moves money into it, selling brings money back.
+  'buy-units': (p) => change((st) => {
+    const g = findBy(st.d.goals, p.id, 'الدرج');
+    const entryId = nowStamp('ub');
+    checkSpend(st.d, st.book, v('ub-place'), toPiasters(egp('ub-paid')));
+    buyUnits(st.book, st.d, g, { qty: egp('ub-qty'), paidEgp: egp('ub-paid'), placeId: v('ub-place'), date: today(), entryId });
+    doneMsg = `✓ اتسجل الشراء: ${v('ub-qty')} ${g.unit}`;
+  }, 'drawer', { id: p.id }, () => doneMsg),
+  'sell-units': (p) => change((st) => {
+    const g = findBy(st.d.goals, p.id, 'الدرج');
+    const ensure = (id, name, type, list, extra = {}) => {
+      if (st.book.accounts.has(id)) return id;
+      addAccount(st.book, { id, name, type });
+      list.push({ id, name, ...extra });
+      return id;
+    };
+    const r = sellUnits(st.book, st.d, g, {
+      qty: egp('us-qty'), receivedEgp: egp('us-got'), placeId: v('us-place'), date: today(), entryId: nowStamp('us'),
+      gainId: ensure('s-gain', 'مكسب بيع', 'income', st.d.sources, { kind: 'open' }),
+      lossId: ensure('e-loss', 'خسارة بيع', 'expense', st.d.categories),
+    });
+    doneMsg = r.diff === 0 ? '✓ اتسجل البيع، لا مكسب ولا خسارة'
+      : r.diff > 0 ? `✓ اتسجل البيع. كسبت ${formatMoney(r.diff)}` : `✓ اتسجل البيع. خسرت ${formatMoney(-r.diff)}`;
+  }, 'drawer', { id: p.id }, () => doneMsg),
 
   // One amount per drawer, from the cash or a wallet, or new money from outside (counted as income).
   'put-drawers': (p) => change((st) => {

@@ -2,10 +2,10 @@
 // The screens live in src/ui/ by area; this file only lists them.
 import { setupScreen, STEPS, homeScreen, moreScreen, settingsScreen, aboutScreen } from './ui/home.js';
 import {
-  MISC_SOURCE, OUTSIDE, expenseScreen, incomeScreen, incomeNewScreen, sourceNewScreen, sourceEditScreen,
-  transferScreen, splitScreen, templatesScreen, templateScreen, dailyScreen, logScreen, borrowsScreen,
-  budgetsScreen, categoriesScreen,
+  incomeScreen, sourceNewScreen, sourceEditScreen, transferScreen, templatesScreen, templateScreen, dailyScreen,
+  logScreen, borrowsScreen, budgetsScreen, categoriesScreen,
 } from './ui/money.js';
+import { flowScreen } from './ui/flow.js';
 import { safesScreen, safeScreen, drawerNewScreen, drawerScreen, walletsScreen } from './ui/safes.js';
 import { countScreen } from './ui/count.js';
 import { lockScreen } from './ui/lock.js';
@@ -14,20 +14,19 @@ import {
   accountsScreen, personNewScreen, personScreen, debtNewScreen, debtScreen, debtsReportScreen,
 } from './ui/accounts.js';
 
-export { setupScreen, STEPS, MISC_SOURCE, OUTSIDE, JAM_STEPS, lockScreen };
+export { setupScreen, STEPS, JAM_STEPS, lockScreen };
 
 export const SCREENS = {
   home: homeScreen,
   more: moreScreen,
   settings: settingsScreen,
   about: aboutScreen,
-  expense: expenseScreen,
+  // «expense», «income-new», «split» and «daily-new» are not screens any more: go() turns them into a flow.
+  flow: flowScreen,
   income: incomeScreen,
-  'income-new': incomeNewScreen,
   'source-new': sourceNewScreen,
   'source-edit': sourceEditScreen,
   transfer: transferScreen,
-  split: splitScreen,
   templates: templatesScreen,
   template: templateScreen,
   daily: dailyScreen,

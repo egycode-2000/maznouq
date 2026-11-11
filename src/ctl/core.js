@@ -11,6 +11,7 @@ import { viewData } from '../archive.js';
 import { placeList } from '../places.js';
 import { EXAMPLES } from '../ui/examples.js';
 import { esc } from '../ui/common.js';
+import { FLOW_ROUTES, newFlow } from '../flow.js';
 
 export const root = document.getElementById('app');
 const DEFAULT_CATEGORIES = ['أكل', 'مواصلات', 'موبايل ونت', 'ترفيه', 'ملابس', 'صحة', 'تعليم', 'صدقات'];
@@ -42,6 +43,9 @@ export const session = {
   // An invoice photo read from the form, waiting for the entry it belongs to.
   pendingPhoto: null,
   photoFor: null,
+  // The question-by-question flow in progress (income, expense, split, daily), and the last thing it saved.
+  flow: null,
+  saved: null,
 };
 
 export { nowStamp };
@@ -65,7 +69,16 @@ export function shiftDay(days) {
 }
 
 // Opens a screen. msg is shown at the top: start it with ✓ for success, anything else is an error.
+// The old screen names for expense, income and split now start their question-by-question flow.
 export function go(name, p = {}, msg = '') {
+  if (FLOW_ROUTES[name]) {
+    session.flow = newFlow(FLOW_ROUTES[name], p);
+    session.pendingPhoto = null;
+    session.route = { name: 'flow', p: {} };
+    session.flash = msg;
+    return render();
+  }
+  if (name !== 'flow') session.flow = null;
   session.route = { name, p };
   session.flash = msg;
   return render();
@@ -90,16 +103,42 @@ export async function render() {
     const view = viewData(d, book);
     const ctx = {
       d: view.d, archived: view.archived, book, today: today(), month: today().slice(0, 7),
-      places: placeList(view.d, book), jamDraft: session.jamDraft,
+      places: placeList(view.d, book), jamDraft: session.jamDraft, flow: session.flow,
     };
     session.ctx = ctx;
+    if (session.route.name === 'flow' && !session.flow) session.route = { name: 'home', p: {} };
     const screen = SCREENS[session.route.name] ?? SCREENS.home;
     root.innerHTML = screen(ctx, session.route.p, flash);
+    showSaved();
+    fitHubs();
     autoHelp(state);
   }
   window.scrollTo(0, 0);
   root.querySelector('[data-autofocus]')?.focus();
   livePaint();
+}
+
+// After a flow records something, the next screen says so once, with «تراجع» and «عدّل».
+function showSaved() {
+  const s = session.saved;
+  if (!s) return;
+  if (s.shown) {
+    session.saved = null;
+    return;
+  }
+  s.shown = true;
+  const bar = document.createElement('div');
+  bar.className = 'savedbar';
+  bar.innerHTML = `<span>✓ ${esc(s.text)}</span>
+    ${s.undoIds.length ? '<button type="button" data-do="undo-saved">تراجع</button>' : ''}
+    ${s.entryId ? `<button type="button" data-do="edit-entry" data-id="${esc(s.entryId)}">عدّل</button>` : ''}`;
+  root.querySelector('.body')?.prepend(bar);
+}
+
+// The home circles are drawn on a 390px stage; on a narrower phone the stage shrinks to fit.
+function fitHubs() {
+  const stage = root.querySelector('.hubstage');
+  if (stage) stage.style.zoom = String(Math.min(1, stage.parentElement.clientWidth / 390));
 }
 
 // Runs a change on the live ledger, saves it, then opens the next screen.
@@ -171,7 +210,10 @@ export function openHelp(key) {
       <button class="btn" data-help-close>فهمت</button>
     </div>`;
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-help-close]')) overlay.remove();
+    if (!(e.target === overlay || e.target.closest('[data-help-close]'))) return;
+    overlay.remove();
+    // Back to the field that was waiting for typing (the amount, a name...).
+    root.querySelector('[data-autofocus]')?.focus();
   });
   document.body.append(overlay);
 }
@@ -193,8 +235,6 @@ const fieldMoney = (el) => {
 const chosen = (group) => root.querySelector(`[data-pickgroup="${group}"] .chip.on`);
 
 export function livePaint() {
-  paintSplit('split-summary', document.getElementById('split-amount'));
-  paintCover();
   paintFee();
   paintPut();
   paintCount();
@@ -208,25 +248,6 @@ function splitRows() {
   }));
 }
 export { splitRows };
-
-function paintSplit(boxId, amountInput) {
-  const box = document.getElementById(boxId);
-  if (!box || !amountInput) return;
-  try {
-    const amount = fieldMoney(amountInput) ?? 0;
-    const rows = splitRows();
-    let total = 0;
-    for (const r of rows) total += r.mode === 'pct' ? Math.round((amount * r.value) / 100) : Math.round(r.value * 100);
-    const rest = amount - total;
-    box.className = `card split-summary ${rest < 0 ? 'neg' : ''}`;
-    box.innerHTML = rest < 0
-      ? `التوزيع أكبر من المبلغ بـ ${formatMoney(-rest)}`
-      : `<div class="row"><span>هيتوزّع</span><b>${formatMoney(total)}</b></div><div class="row"><span>يفضل في مكانه</span><b>${formatMoney(rest)}</b></div>`;
-  } catch (e) {
-    box.className = 'card split-summary neg';
-    box.textContent = e.message;
-  }
-}
 
 function paintCount() {
   const box = document.getElementById('count-diff');
@@ -247,17 +268,6 @@ function paintCount() {
   box.innerHTML = `<div class="row"><span>البرنامج شايف</span><b>${formatMoney(recorded)}</b></div>
     <div class="row"><span>إنت عدّيت</span><b>${formatMoney(counted)}</b></div>
     <div class="row total ${diff < 0 ? 'neg' : ''}"><span>الفرق</span><b>${line}</b></div>`;
-}
-
-function paintCover() {
-  const box = document.getElementById('cover');
-  if (!box) return;
-  const amount = fieldMoney(document.getElementById('amount')) ?? 0;
-  const from = chosen('from');
-  const balance = Number(from?.dataset.balance ?? 0);
-  const short = amount - Math.max(0, balance);
-  box.hidden = !(amount > 0 && short > 0);
-  if (!box.hidden) document.getElementById('cover-text').textContent = `المكان ده فيه ${formatMoney(Math.max(0, balance))}، ناقص ${formatMoney(short)}`;
 }
 
 function paintFee() {

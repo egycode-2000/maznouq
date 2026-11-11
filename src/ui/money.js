@@ -1,53 +1,15 @@
-// Money in and out: expense, income, transfer, split, saved splits (daily too), the log, borrows,
-// budgets and spending categories.
+// Money screens that are not question-by-question: income sources, transfer, saved splits (daily too),
+// the log, borrows, budgets and spending categories. Expense, income and «وزّع» live in ui/flow.js.
 import {
-  esc, money, egpValue, bar, pick, placePick, amountCard, moreFields, noteField, dateField, item, page,
+  esc, money, egpValue, bar, pick, placePick, amountCard, moreFields, noteField, item, page,
   retireButton, archivedBlock, photoBtn,
 } from './common.js';
 import { incomeFrom, spentIn, openBorrows, monthTotals } from '../reports.js';
 import { pendingDays, dailyTotal } from '../daily.js';
 import { logRows } from '../log.js';
 import { leftOf } from '../borrows.js';
-import { cashOf, defaultPlace } from '../places.js';
+import { cashOf } from '../places.js';
 import { showDate } from '../format.js';
-
-// «دخل متفرق» is always offered for money with no regular source (a gift, money found, ...).
-export const MISC_SOURCE = { id: 's-misc', name: 'دخل متفرق' };
-export const OUTSIDE = '__outside';
-
-function sourcesWithMisc(ctx) {
-  const known = [...ctx.d.sources, ...(ctx.archived?.source ?? [])].some((s) => s.id === MISC_SOURCE.id);
-  return known ? ctx.d.sources : [...ctx.d.sources, MISC_SOURCE];
-}
-
-const lastPlace = (ctx) => defaultPlace(ctx.d, ctx.places);
-
-// ---------- Expense ----------
-export function expenseScreen(ctx, p, flash) {
-  const { d, places } = ctx;
-  const from = p.from ?? lastPlace(ctx);
-  const cats = d.categories.length
-    ? pick('category', d.categories, d.settings.lastCategory)
-    : '<p class="hint">مفيش أوجه صرف. ضيف من المزيد ← أوجه الصرف.</p><input type="hidden" id="category" value="" />';
-  return page({
-    title: 'مصروف جديد', sub: 'المبلغ، على إيه، ومنين. وخلاص', back: p.back ?? 'home', flash, help: 'expense',
-    body: `
-      ${amountCard('صرفت كام؟')}
-      <div class="lbl">على إيه؟</div>
-      ${cats}
-      <div class="lbl">منين؟</div>
-      ${placePick(places, 'from', from)}
-      <div class="card warn-card" id="cover" hidden>
-        <b id="cover-text"></b>
-        <span class="hint">تكمّلهم منين؟</span>
-        ${placePick(places, 'cover', cashOf(d)?.id)}
-        <label class="check"><input type="checkbox" id="cover-back" checked /> هرجّعهم للمكان ده بعدين (سلفة)</label>
-      </div>
-      ${moreFields(ctx.today)}
-      <button class="btn" data-do="save-expense">سجّل المصروف</button>
-      <button class="btn2" data-do="save-expense-more">سجّل وأضيف مصروف تاني</button>`,
-  });
-}
 
 // ---------- Income ----------
 export function incomeScreen(ctx, p, flash) {
@@ -58,7 +20,7 @@ export function incomeScreen(ctx, p, flash) {
       <div class="row"><b>${esc(s.name)}</b><b>${money(incomeFrom(book, s.id, month))}</b></div>
       <span class="hint">${s.kind === 'monthly' ? 'شهري' : 'مفتوح'} · دخل الشهر ده</span>
       <div class="row">
-        <button class="btn2 grow" data-go="income-new" data-id="${esc(s.id)}">+ سجّل دخل</button>
+        <button class="btn2 grow" data-go="income-new" data-id="${esc(s.id)}" data-back="income">+ سجّل دخل</button>
         <button class="linkbtn" data-go="source-edit" data-id="${esc(s.id)}">تعديل</button>
       </div>
     </div>`).join('');
@@ -69,23 +31,6 @@ export function incomeScreen(ctx, p, flash) {
       <button class="btn2" data-go="source-new">+ مصدر دخل جديد</button>
       ${archivedBlock(ctx.archived, 'source', 'مصادر ملغية')}
       <p class="hint">السداد من الناس وقبض الجمعية مش دخل، بس بيزوّدوا المكان اللي استلمت فيه.</p>`,
-  });
-}
-
-export function incomeNewScreen(ctx, p, flash) {
-  const { d, places } = ctx;
-  return page({
-    title: 'دخل جديد', back: 'home', flash, help: 'income-new',
-    body: `
-      ${amountCard('دخلك كام؟')}
-      <div class="lbl">من أنهي مصدر؟</div>
-      ${pick('sourceId', sourcesWithMisc(ctx), p.id ?? d.settings.lastSource)}
-      <div class="lbl">دخلت فين؟</div>
-      ${placePick(places, 'to', p.to ?? cashOf(d)?.id)}
-      <input id="payer" class="field" placeholder="مين دفع؟ (اختياري)" />
-      ${moreFields(ctx.today)}
-      <button class="btn" data-do="save-income">سجّل الدخل</button>
-      <button class="btn2" data-do="save-income-more">سجّل وأضيف دخل تاني</button>`,
   });
 }
 
@@ -151,7 +96,7 @@ export function transferScreen(ctx, p, flash) {
   });
 }
 
-// ---------- Split (وزّع) ----------
+// ---------- The rows of a saved split ----------
 function splitRows(ctx, values) {
   const { d, book, places } = ctx;
   const row = (id, name, sub, kind) => {
@@ -178,33 +123,6 @@ function splitRows(ctx, values) {
     </details>`;
 }
 
-export function splitScreen(ctx, p, flash) {
-  const { d, places } = ctx;
-  const tpl = d.templates.find((t) => t.id === p.tpl) ?? null;
-  const values = Object.fromEntries((tpl?.rows ?? []).map((r) => [r.target, r]));
-  const from = p.from ?? tpl?.sourceId ?? cashOf(d)?.id;
-  const amount = p.amount ?? '';
-  const saved = d.templates.filter((t) => !t.daily);
-  return page({
-    title: 'وزّع الفلوس', sub: 'رقم أو نسبة قصاد كل درج', back: p.back ?? 'home', flash, help: 'split',
-    body: `
-      ${saved.length ? `
-      <div class="lbl">تقسيمة محفوظة</div>
-      <div class="chips">${saved.map((t) => `<button type="button" class="chip ${t.id === tpl?.id ? 'on' : ''}" data-go="split" data-tpl="${esc(t.id)}" data-amount="${esc(amount)}" data-back="${esc(p.back ?? 'home')}">${esc(t.name)}</button>`).join('')}</div>` : ''}
-      ${amountCard('المبلغ اللي هتوزّعه', { id: 'split-amount', value: amount, quick: false })}
-      <div class="lbl">الفلوس جاية منين؟</div>
-      ${placePick(places, 'split-from', from, { only: ['cash', 'wallet', 'drawer'] })}
-      <label class="check"><input type="checkbox" id="split-outside" ${p.outside ? 'checked' : ''} /> فلوس جديدة من بره (تتسجل دخل)</label>
-      <input id="split-payer" class="field" placeholder="من مين؟ (لو من بره)" />
-      ${splitRows(ctx, values)}
-      <div class="card split-summary" id="split-summary"></div>
-      <input id="split-save-name" class="field" placeholder="احفظها كتقسيمة باسم (اختياري)" value="${esc(tpl && !tpl.daily ? tpl.name : '')}" />
-      ${noteField('split-note')}
-      <button class="btn" data-do="do-split" data-tpl="${esc(tpl?.id ?? '')}">وزّع</button>
-      <button class="btn2" data-go="${esc(p.back ?? 'home')}">تخطّي</button>`,
-  });
-}
-
 // ---------- Saved splits and the daily split ----------
 export function templatesScreen(ctx, p, flash) {
   const { d, today } = ctx;
@@ -216,13 +134,14 @@ export function templatesScreen(ctx, p, flash) {
   return page({
     title: 'التقسيمات', back: 'more', tab: 'more', flash, help: 'templates',
     body: `${rows || '<p class="hint">مفيش تقسيمات لسه.</p>'}
-      <button class="btn" data-go="template" data-daily="1">+ تقسيم يومي</button>
-      <button class="btn2" data-go="template">+ تقسيمة عادية</button>`,
+      <button class="btn" data-go="daily-new" data-back="templates">+ توزيع يومي (بالأسئلة)</button>
+      <button class="btn2" data-go="template">+ تقسيمة عادية</button>
+      <p class="hint">التقسيمة العادية تقدر تحفظها كمان وإنت بتوزّع دخل: اكتب اسمها في آخر شاشة.</p>`,
   });
 }
 
 export function templateScreen(ctx, p, flash) {
-  const { d, places, today } = ctx;
+  const { d, places } = ctx;
   const t = d.templates.find((x) => x.id === p.id) ?? null;
   const daily = t ? t.daily : Boolean(p.daily);
   const values = Object.fromEntries((t?.rows ?? []).map((r) => [r.target, r]));
@@ -234,7 +153,6 @@ export function templateScreen(ctx, p, flash) {
       <label class="check"><input type="checkbox" id="tp-daily" ${daily ? 'checked' : ''} /> كل يوم (يسألني كل يوم حطيت ولا لأ)</label>
       <div class="lbl">بتتسحب منين؟</div>
       ${placePick(places, 'tp-source', t?.sourceId ?? cashOf(d)?.id, { only: ['cash', 'wallet'] })}
-      ${!t ? `<label class="lbl">تبدأ من يوم</label>${dateField(today, 'tp-start')}` : ''}
       <p class="hint">${daily ? 'التقسيم اليومي بالمبلغ بس.' : 'تقدر تكتب مبلغ أو نسبة من المبلغ اللي هتوزّعه.'}</p>
       ${splitRows(ctx, values)}
       ${t ? `<label class="check"><input type="checkbox" id="tp-active" ${t.active ? 'checked' : ''} /> شغالة</label>` : ''}
@@ -250,8 +168,10 @@ export function dailyScreen(ctx, p, flash) {
   const days = Math.max(1, pendingDays(t, today));
   const name = (target) => places.find((x) => x.id === target)?.name ?? d.categories.find((c) => c.id === target)?.name ?? 'محذوف';
   return page({
-    title: `تقسيم النهارده: ${t.name}`, sub: days > 1 ? `فاتك ${days} أيام` : 'علّم اللي حطيته فعلا', back: 'home', flash, help: 'daily',
+    title: `توزيع النهارده: ${t.name}`, sub: days > 1 ? `فاتك ${days} أيام، والمبالغ متجمّعة` : 'حطيتهم؟', back: 'home', flash, help: 'daily',
     body: `
+      <button class="btn" data-do="confirm-daily" data-id="${esc(t.id)}" data-all="1">حطيتهم كلهم ✓</button>
+      <div class="lbl">أو علّم اللي حطيته بس</div>
       <div class="card">
         ${t.rows.map((r, i) => `
           <label class="check-row">
@@ -263,7 +183,7 @@ export function dailyScreen(ctx, p, flash) {
       <div class="lbl">اتسحبت منين؟</div>
       ${placePick(places, 'dy-from', t.sourceId ?? cashOf(d)?.id, { only: ['cash', 'wallet'] })}
       ${noteField('dy-note')}
-      <button class="btn" data-do="confirm-daily" data-id="${esc(t.id)}">أكّد</button>
+      <button class="btn2" data-do="confirm-daily" data-id="${esc(t.id)}">حطيت اللي معلّم عليه بس</button>
       <button class="btn2" data-do="skip-daily" data-id="${esc(t.id)}">ماحطيتش حاجة، اتخطى ${days > 1 ? 'الأيام دي' : 'النهارده'}</button>
       <p class="hint">اللي مش متعلّم مش هيتخصم من الكاش.</p>`,
   });
@@ -272,7 +192,7 @@ export function dailyScreen(ctx, p, flash) {
 // ---------- Log ----------
 export function logScreen(ctx, p, flash) {
   const { book } = ctx;
-  const rows = logRows(book, { search: p.q ?? '', month: p.m ?? '' }).slice(0, 300);
+  const rows = logRows(book, { search: p.q ?? '', month: p.m ?? '', edits: ctx.d.edits }).slice(0, 300);
   return page({
     title: 'سجل الحركات', sub: 'الأحدث فوق', back: 'more', tab: 'more', flash, help: 'log',
     body: `
@@ -285,9 +205,13 @@ export function logScreen(ctx, p, flash) {
         <div class="card logrow ${r.reversal ? 'muted' : ''}">
           <div class="row"><b>${esc(r.memo)}</b><b>${money(r.amount)}</b></div>
           <div class="row small"><span>${showDate(r.date)}</span><span>${esc(r.from.join('، '))} ← ${esc(r.to.join('، '))}</span></div>
+          ${r.editedFrom !== null ? `<details class="edited"><summary>اتعدّلت</summary><span class="hint">كانت ${money(r.editedFrom)} قبل التعديل.</span></details>` : ''}
           ${r.note ? `<span class="hint">ملحوظة: ${esc(r.note)}</span>` : ''}
           ${photoBtn(ctx.d, r.id)}
-          ${r.undo.can ? `<button class="linkbtn danger" data-do="undo-entry" data-id="${esc(r.id)}">اعكس الحركة دي</button>` : `<span class="hint">${esc(r.undo.why)}</span>`}
+          ${r.undo.can ? `<div class="row">
+            ${r.edit ? `<button class="linkbtn" data-do="edit-entry" data-id="${esc(r.id)}">عدّل</button>` : '<span></span>'}
+            <button class="linkbtn danger" data-do="undo-entry" data-id="${esc(r.id)}">اعكس الحركة دي</button>
+          </div>` : `<span class="hint">${esc(r.undo.why)}</span>`}
         </div>`).join('') || '<p class="hint">مفيش حركات.</p>'}`,
   });
 }
@@ -298,20 +222,24 @@ export function borrowsScreen(ctx, p, flash) {
   const name = (id) => places.find((x) => x.id === id)?.name ?? 'مكان ملغي';
   const open = openBorrows(d);
   const done = d.borrows.filter((b) => leftOf(b) <= 0);
+  // A borrow with no «toId» is money spent from a drawer that you said you will put back.
+  const title = (b) => (b.toId ? `${name(b.toId)} عليه لـ ${name(b.fromId)}` : `${name(b.fromId)} مستني يرجعله`);
   return page({
-    title: 'السلف بين أماكنك', back: 'more', tab: 'more', flash, help: 'borrows',
+    title: 'سلف لسه مارجعتش', sub: 'فلوس خدتها من درج وقلت هترجّعها', back: p.back ?? 'home', tab: 'home', flash, help: 'borrows',
     body: `
       ${open.map((b) => `
         <div class="card">
-          <div class="row"><b>${esc(name(b.toId))} عليه لـ ${esc(name(b.fromId))}</b><b>${money(leftOf(b))}</b></div>
+          <div class="row"><b>${esc(title(b))}</b><b>${money(leftOf(b))}</b></div>
           <span class="hint">من ${showDate(b.date)}${b.note ? ` · ${esc(b.note)}` : ''}${b.repaid ? ` · رجع منها ${money(b.repaid)}` : ''}</span>
+          ${b.toId ? '' : `<div class="lbl">هترجّعهم منين؟</div>${placePick(places, `brp-${b.id}`, cashOf(d)?.id, { only: ['cash', 'wallet'] })}`}
           <div class="row">
             <input class="field grow" id="br-${esc(b.id)}" inputmode="decimal" value="${egpValue(leftOf(b))}" />
             <button class="btn2" data-do="repay-borrow" data-id="${esc(b.id)}">رجّع</button>
           </div>
+          <span class="hint">تقدر ترجّع جزء دلوقتي والباقي بعدين.</span>
         </div>`).join('') || '<p class="hint">مفيش سلف مفتوحة.</p>'}
       ${done.length ? `<details class="card"><summary>سلف رجعت (${done.length})</summary>
-        ${done.map((b) => `<div class="row small"><span>${esc(name(b.toId))} ← ${esc(name(b.fromId))} · ${showDate(b.date)}</span><span>${money(b.amount)}</span></div>`).join('')}
+        ${done.map((b) => `<div class="row small"><span>${esc(title(b))} · ${showDate(b.date)}</span><span>${money(b.amount)}</span></div>`).join('')}
       </details>` : ''}`,
   });
 }

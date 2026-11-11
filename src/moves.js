@@ -62,28 +62,33 @@ export function transfer(book, {
   return { arrived: amount - fee, fee };
 }
 
-// A drawer (درج) keeps money aside for one purpose. kind: 'saving' (تحويش), 'debt' (محجوز لدين), 'other'.
+// A drawer (درج) keeps money aside for one purpose, named by the user. It may have a goal, and it may hold
+// a unit other than money (unit: 'جرام دهب'). kind 'debt' is money reserved for a debt (محجوز لدين).
 export function createGoal(book, {
-  id, name, note = '', photo = '', targetEgp = 0, kind = 'saving', debtId = null, safeId = null,
+  id, name, note = '', photo = '', targetEgp = 0, kind = 'other', debtId = null, safeId = null, unit = '', targetQty = 0,
 }) {
   const cleanName = String(name ?? '').trim();
   if (cleanName.length < 2) throw new Error('اكتب اسم الدرج');
-  const target = Number(targetEgp) > 0 ? toPiasters(Number(targetEgp)) : 0;
+  const cleanUnit = String(unit ?? '').trim();
+  const target = !cleanUnit && Number(targetEgp) > 0 ? toPiasters(Number(targetEgp)) : 0;
   addAccount(book, { id: `goal-${id}`, name: `درج: ${cleanName}`, type: 'asset' });
   return {
     id, name: cleanName, note: String(note).trim(), photo, target, accountId: `goal-${id}`, kind, debtId, safeId,
+    unit: cleanUnit || null, targetQty: cleanUnit && Number(targetQty) > 0 ? Math.round(Number(targetQty) * 1000) : 0,
   };
 }
 
-export function editGoal(book, goal, { name, targetEgp, note, safeId, kind }) {
+export const hasGoal = (g) => (g.unit ? g.targetQty > 0 : g.target > 0);
+
+export function editGoal(book, goal, { name, targetEgp, note, safeId, targetQty }) {
   const cleanName = String(name ?? '').trim();
   if (cleanName.length < 2) throw new Error('اكتب اسم الدرج');
   renameAccount(book, goal.accountId, `درج: ${cleanName}`);
   goal.name = cleanName;
-  goal.target = Number(targetEgp) > 0 ? toPiasters(Number(targetEgp)) : 0;
+  if (goal.unit) goal.targetQty = Number(targetQty) > 0 ? Math.round(Number(targetQty) * 1000) : 0;
+  else goal.target = Number(targetEgp) > 0 ? toPiasters(Number(targetEgp)) : 0;
   goal.note = String(note ?? '').trim();
   if (safeId) goal.safeId = safeId;
-  if (kind && goal.kind !== 'debt') goal.kind = kind === 'other' ? 'other' : 'saving';
 }
 
 export function depositGoal(book, goal, args) {

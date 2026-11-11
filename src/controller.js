@@ -9,6 +9,8 @@ import { duesActions } from './ctl/dues.js';
 import { accountActions } from './ctl/accounts.js';
 import { systemActions } from './ctl/system.js';
 import { securityActions } from './ctl/security.js';
+import { flowActions } from './ctl/flow.js';
+import { tick } from './sound.js';
 import { photoToDataUrl } from './ctl/places.js';
 import { pinMatches, shouldRelock, unlockWithBiometric } from './lock.js';
 import { loadValue, clearAll } from './storage.js';
@@ -20,6 +22,7 @@ import { openCalc } from './calcui.js';
 
 const ACTIONS = {
   ...setupActions, ...moneyActions, ...placeActions, ...duesActions, ...accountActions, ...systemActions, ...securityActions,
+  ...flowActions,
 };
 
 // ---------- The lock screen ----------
@@ -69,8 +72,28 @@ async function showPhoto(entryId) {
   document.body.append(overlay);
 }
 
+// The number pad under the amount: types into the amount without opening the phone keyboard.
+function pressKey(key) {
+  const input = document.getElementById('flow-amount');
+  if (!input) return;
+  // An amount that was already there (when editing) is replaced by the first key, not added to.
+  if (input.dataset.fresh) {
+    delete input.dataset.fresh;
+    if (key !== 'del') input.value = '';
+  }
+  if (key === 'del') input.value = input.value.slice(0, -1);
+  else if (key === '.') input.value = input.value.includes('.') ? input.value : `${input.value || '0'}.`;
+  else if (input.value.length < 12) input.value += key;
+  input.focus();
+}
+
 // Small on-screen helpers that do not save anything.
 function handleLocal(target) {
+  const key = target.closest('[data-key]');
+  if (key) {
+    pressKey(key.dataset.key);
+    return true;
+  }
   const pickEl = target.closest('[data-pick]');
   if (pickEl) {
     document.getElementById(pickEl.dataset.pick).value = pickEl.dataset.value;
@@ -114,6 +137,8 @@ function handleLocal(target) {
 }
 
 root.addEventListener('click', async (event) => {
+  // The «تكة»: every round button and number key clicks, unless turned off in the settings.
+  if (session.ctx?.d.settings.sound && event.target.closest('.hub-big, .hub-br, .hub-lab, .hub-mini, .circle, .key, .navbtn.fab')) tick();
   const pinKey = event.target.closest('[data-pin]');
   if (pinKey) return typePin(pinKey.dataset.pin);
   if (event.target.closest('[data-unlock-bio]')) {
@@ -145,11 +170,32 @@ root.addEventListener('click', async (event) => {
   if (!action) return undefined;
   try {
     const file = document.getElementById('photo')?.files?.[0];
-    session.pendingPhoto = file ? await photoToDataUrl(file, 1400, 0.75) : null;
+    // Inside a flow the photo is picked on the first question and kept until the last one records.
+    if (file) session.pendingPhoto = await photoToDataUrl(file, 1400, 0.75);
+    else if (!session.flow) session.pendingPhoto = null;
     await action(p, el);
   } catch (e) {
     showError(e.message);
   }
+});
+
+// On the amount question the computer keyboard works even when the cursor is not inside the amount.
+document.addEventListener('keydown', (event) => {
+  const input = document.getElementById('flow-amount');
+  if (!input || document.querySelector('.help-overlay, .calc-overlay')) return;
+  if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  const digit = '٠١٢٣٤٥٦٧٨٩'.indexOf(event.key);
+  const key = digit >= 0 ? String(digit) : event.key;
+  if (/^[0-9.]$/.test(key)) pressKey(key);
+  else if (key === 'Backspace') pressKey('del');
+  else if (key === 'Enter') root.querySelector('[data-do="flow-ok"]')?.click();
+  else return;
+  event.preventDefault();
+});
+
+// The number pad must not take the cursor out of the amount, so the computer keyboard keeps working with it.
+root.addEventListener('mousedown', (event) => {
+  if (event.target.closest('.key')) event.preventDefault();
 });
 
 // Enter in a field presses the main button of that card (or of the screen).
@@ -163,7 +209,18 @@ root.addEventListener('keydown', (event) => {
   }
 });
 
+// A field that already holds a number or a name: tapping it selects all of it, so typing replaces it
+// instead of adding to it (no more «1» that turns into «110»).
+root.addEventListener('focusin', (event) => {
+  const el = event.target;
+  if (el.tagName !== 'INPUT' || !el.value || ['date', 'month', 'file', 'checkbox', 'hidden'].includes(el.type)) return;
+  // The amount in a flow is typed digit by digit; only an old amount (while editing) is selected to be replaced.
+  if (el.id === 'flow-amount' && !el.dataset.fresh) return;
+  setTimeout(() => { try { el.select(); } catch { /* some field types cannot be selected */ } }, 0);
+});
+
 root.addEventListener('input', (event) => {
+  if (event.target.id === 'flow-amount') delete event.target.dataset.fresh;
   if (event.target.id === 'fee') event.target.dataset.touched = '1';
   livePaint();
 });

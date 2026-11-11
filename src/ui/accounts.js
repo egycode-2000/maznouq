@@ -134,9 +134,9 @@ export function debtNewScreen(ctx, p, flash) {
       <details class="card">
         <summary>تفاصيل الأقساط والتاريخ</summary>
         <label class="lbl">عدد الأقساط</label>
-        <input id="dn-count" class="field" inputmode="numeric" value="3" />
+        <input id="dn-count" class="field" inputmode="numeric" placeholder="مثلا: 3" />
         <label class="lbl">كل كام يوم؟ (لو «كل عدد أيام»)</label>
-        <input id="dn-days" class="field" inputmode="numeric" value="20" />
+        <input id="dn-days" class="field" inputmode="numeric" placeholder="مثلا: 20" />
         <label class="lbl">تاريخ أول قسط</label>
         <input id="dn-first" class="field" type="date" value="${ctx.today}" />
         <label class="lbl">تاريخ الدين</label>

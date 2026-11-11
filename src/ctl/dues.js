@@ -29,8 +29,9 @@ function readJamAnswer(step) {
     if (!(egp('jq') > 0)) throw new Error('اكتب القسط');
     a.monthly = String(egp('jq'));
   }
-  if (key === 'payDay') a.payDay = String(toInt(value || '1', 'يوم الدفع'));
-  if (key === 'currentNumber') a.currentNumber = String(toInt(value || '1', 'رقم الشهر'));
+  if (['payDay', 'currentNumber'].includes(key) && !String(value).trim()) throw new Error('اكتب الرقم الأول');
+  if (key === 'payDay') a.payDay = String(toInt(value, 'يوم الدفع'));
+  if (key === 'currentNumber') a.currentNumber = String(toInt(value, 'رقم الشهر'));
   if (key === 'currentPaid') a.currentPaid = v('jq');
   if (key === 'received') a.received = v('jq');
   if (key === 'detail') {

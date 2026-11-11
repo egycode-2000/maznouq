@@ -1,10 +1,10 @@
 // Settings, backup, the log (search and undo), and cancelling or restoring items.
 import { session, go, change, today, v, nowStamp } from './core.js';
 import { exportBackup } from '../state.js';
-import { reverseEntry } from '../ledger.js';
+import { undoEntry } from '../undo.js';
+import { tick } from '../sound.js';
 import { validateName } from '../setup.js';
 import { retire, restore, KINDS } from '../archive.js';
-import { undoRule } from '../log.js';
 
 const RETIRE_HOME = {
   source: 'income', category: 'categories', wallet: 'wallets', bill: 'dues', goal: 'safes', person: 'accounts', safe: 'safes',
@@ -31,16 +31,12 @@ export const systemActions = {
 
   'log-search': () => go('log', { q: v('log-q'), m: v('log-m') }),
   'undo-entry': (p) => change((st) => {
-    const entry = st.book.entries.find((e) => e.id === p.id);
-    if (!entry) throw new Error('الحركة مش موجودة');
-    const rule = undoRule(st.book, entry);
-    if (!rule.can) throw new Error(rule.why);
-    // A borrow made by this entry goes with it, unless part of it was already paid back.
-    const borrow = st.d.borrows.find((b) => b.entryId === entry.id);
-    if (borrow && borrow.repaid > 0) throw new Error('السلفة دي رجع منها جزء. رجّع الباقي أو اعكس الإرجاع الأول');
-    reverseEntry(st.book, entry.id, { id: nowStamp('undo'), date: today() });
-    if (borrow) st.d.borrows = st.d.borrows.filter((b) => b !== borrow);
+    undoEntry(st.book, st.d, p.id, { stamp: nowStamp, date: today() });
   }, 'log', () => session.route.p, '✓ اتعكست الحركة والفلوس رجعت مكانها'),
+  'toggle-sound': () => change((st) => {
+    st.d.settings.sound = !st.d.settings.sound;
+    if (st.d.settings.sound) tick();
+  }, 'settings', {}, ''),
 
   retire: (p) => change((st) => {
     const result = retire(st.book, st.d, p.kind, p.id);

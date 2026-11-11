@@ -1,17 +1,20 @@
 // الخزن والأدراج، والكاش والمحافظ.
 import {
-  esc, money, egpValue, bar, pick, placePick, amountCard, moreFields, item, page, retireButton, archivedBlock,
+  esc, money, egpValue, bar, pick, placePick, amountCard, moreFields, item, page, retireButton, archivedBlock, calcBtn,
 } from './common.js';
 import { moneyPicture, safeSummary, cashOf, defaultPlace } from '../places.js';
 import { borrowsOf, leftOf } from '../borrows.js';
+import { showQty } from '../units.js';
 
-const DRAWER_KINDS = [{ id: 'saving', name: 'تحويش بهدف' }, { id: 'other', name: 'درج عادي (صدقات، مصاريف...)' }];
+// What a drawer holds: money, or something counted in a unit the user names (جرام دهب، دولار، سهم).
+const HOLDS = [{ id: 'money', name: 'فلوس (جنيه)' }, { id: 'unit', name: 'حاجة تانية (دهب، دولار، أسهم...)' }];
+const qtyValue = (q) => (q ? String(q / 1000) : '');
 
 export function safesScreen(ctx, p, flash) {
   const { d, book } = ctx;
   const pic = moneyPicture(d, book);
   return page({
-    title: 'الخزن والأدراج', sub: `إجمالي الخزن: ${money(pic.safesTotal)}`, back: 'more', tab: 'more', flash, help: 'safes',
+    title: 'الخزن والأدراج', sub: `إجمالي الخزن: ${money(pic.safesTotal)}`, back: p.back ?? 'more', tab: 'more', flash, help: 'safes',
     body: `
       ${pic.safes.map((s) => item({
         go: 'safe', params: { id: s.id }, title: s.name, right: money(s.total),
@@ -32,21 +35,26 @@ export function safeScreen(ctx, p, flash) {
   const safe = d.safes.find((s) => s.id === p.id);
   if (!safe) return safesScreen(ctx, p, flash);
   const s = safeSummary(d, book, safe);
-  const drawerRows = s.drawers.map((g) => item({
+  const drawerRows = s.drawers.map((g) => (g.units ? item({
+    go: 'drawer', params: { id: g.id }, title: g.name, right: `${showQty(g.units.qty)} ${g.unit}`,
+    percent: g.units.percent,
+    sub: [`اتدفع فيهم ${money(g.units.cost)}`, g.units.target ? `الهدف ${showQty(g.units.target)} ${g.unit}` : '', 'مش داخل في إجمالي الخزنة'].filter(Boolean).join(' · '),
+  }) : item({
     go: g.kind === 'debt' && g.debtId ? 'debt' : 'drawer', params: { id: g.kind === 'debt' && g.debtId ? g.debtId : g.id },
     title: g.name, right: money(g.balance),
     percent: g.target ? Math.floor((g.balance * 100) / g.target) : null,
     sub: [g.target ? `الهدف ${money(g.target)}` : '', g.kind === 'debt' ? 'محجوز لدين' : ''].filter(Boolean).join(' · '),
-  })).join('');
+  }))).join('');
+  const moneyDrawers = s.drawers.filter((g) => !g.units);
   return page({
     title: safe.name, sub: `في الخزنة: ${money(s.total)}`, back: 'safes', tab: 'more', flash, help: 'safe',
     body: `
       ${drawerRows || '<p class="hint">الخزنة فاضية. ضيف أدراجها تحت.</p>'}
       <button class="btn2" data-go="drawer-new" data-safe="${esc(safe.id)}">+ درج جديد في الخزنة دي</button>
-      ${s.drawers.length ? `
+      ${moneyDrawers.length ? `
       <details class="card" ${p.put ? 'open' : ''}>
         <summary>حط في الأدراج</summary>
-        ${s.drawers.map((g) => `
+        ${moneyDrawers.map((g) => `
           <div class="split-row" data-kind="drawer">
             <span class="split-name"><b>${esc(g.name)}</b><small>فيه ${money(g.balance)}</small></span>
             <input class="field split-val put-val" id="put-${esc(g.accountId)}" data-target="${esc(g.accountId)}" inputmode="decimal" placeholder="0" />
@@ -75,27 +83,92 @@ export function drawerNewScreen(ctx, p, flash) {
   return page({
     title: 'درج جديد', back: 'safe', backParams: { id: p.safe ?? '' }, tab: 'more', flash, help: 'drawer',
     body: `
-      <label class="lbl">اسم الدرج</label>
-      <input id="g-name" class="field" placeholder="مثلا: الصدقات" data-autofocus />
-      <div class="lbl">النوع</div>
-      ${pick('g-kind', DRAWER_KINDS, 'other')}
+      <label class="lbl">اسم الدرج (سمّيه زي ما تحب)</label>
+      <input id="g-name" class="field" placeholder="مثلا: الصدقات، العربية، دهب" data-autofocus />
       <div class="lbl">في أنهي خزنة؟</div>
       ${pick('g-safe', d.safes, p.safe)}
-      <label class="lbl">الهدف بالجنيه (اختياري)</label>
-      <input id="g-target" class="field" inputmode="decimal" />
-      <label class="lbl">ملحوظة عن الفلوس دي (اختياري)</label>
+      <div class="lbl">هتشيل فيه إيه؟</div>
+      ${pick('g-holds', HOLDS, 'money')}
+      <label class="lbl">لو حاجة تانية: اسم الوحدة</label>
+      <input id="g-unit" class="field" placeholder="مثلا: جرام دهب، دولار، سهم" />
+      <label class="lbl">ليه هدف؟ اكتبه (أو سيبه فاضي لو مالوش هدف)</label>
+      <input id="g-target" class="field" inputmode="decimal" placeholder="بالجنيه، أو بعدد الوحدات لو حاجة تانية" />
+      <label class="lbl">ملحوظة (اختياري)</label>
       <input id="g-note" class="field" />
       <label class="lbl">صورة للمكان (اختياري)</label>
       <input id="g-photo" class="field file" type="file" accept="image/*" capture="environment" />
-      <p class="hint">المحجوز لدين بيتعمل من شاشة الدين نفسه.</p>
+      <p class="hint">الدرج اللي مالوش هدف (زي الصدقات) لما تصرف منه بيتسجل باسمه على طول. المحجوز لدين بيتعمل من شاشة الدين نفسه.</p>
       <button class="btn" data-do="save-drawer">احفظ الدرج</button>`,
   });
 }
 
-export function drawerScreen(ctx, p, flash) {
+// Editing a drawer: the same fields for both kinds.
+function drawerEdit(ctx, g) {
+  const { d } = ctx;
+  return `
+      <details class="card">
+        <summary>تعديل الدرج</summary>
+        <label class="lbl">الاسم</label>
+        <input id="g-name" class="field" value="${esc(g.name)}" />
+        <div class="lbl">الخزنة</div>
+        ${pick('g-safe', d.safes, g.safeId)}
+        <label class="lbl">${g.unit ? `الهدف (كام ${esc(g.unit)})` : 'الهدف بالجنيه'} · سيبه فاضي لو مالوش هدف</label>
+        <input id="g-target" class="field" inputmode="decimal" value="${g.unit ? qtyValue(g.targetQty) : egpValue(g.target)}" />
+        <label class="lbl">ملحوظة</label>
+        <input id="g-note" class="field" value="${esc(g.note)}" />
+        <label class="lbl">${g.photo ? 'صوّر المكان تاني' : 'صورة للمكان'}</label>
+        <input id="g-photo" class="field file" type="file" accept="image/*" capture="environment" />
+        <button class="btn2" data-do="update-drawer" data-id="${esc(g.id)}">احفظ التعديل</button>
+        ${retireButton('goal', g.id, 'الدرج')}
+      </details>`;
+}
+
+// A drawer that holds units: what is in it, what was paid for it, and buying and selling.
+function unitDrawerScreen(ctx, g, flash) {
   const { d, book, places } = ctx;
+  const safe = safeSummary(d, book, d.safes.find((s) => s.id === g.safeId) ?? { id: g.safeId });
+  const u = safe.drawers.find((x) => x.id === g.id).units;
+  return page({
+    title: g.name, sub: `في الدرج: ${showQty(u.qty)} ${g.unit}${u.target ? ` من ${showQty(u.target)}` : ''}`,
+    back: 'safe', backParams: { id: g.safeId }, tab: 'more', flash, help: 'drawer-unit',
+    body: `
+      <div class="card">
+        ${u.percent === null ? '' : bar(u.percent)}
+        <div class="row"><span>اللي في الدرج</span><b>${showQty(u.qty)} ${esc(g.unit)}</b></div>
+        <div class="row"><span>اتدفع فيهم</span><b>${money(u.cost)}</b></div>
+        ${u.qty ? `<div class="row small"><span>متوسط الـ ${esc(g.unit)}</span><span>${money(u.avg)}</span></div>` : ''}
+        <p class="hint">ده مش داخل في «إجمالي فلوسك»، بيتكتب لوحده بالكمية.</p>
+      </div>
+      <div class="card">
+        <div class="lbl">اشتريت</div>
+        <input id="ub-qty" class="field" inputmode="decimal" placeholder="كام ${esc(g.unit)}؟" />
+        <div class="amount-row"><input id="ub-paid" class="field grow" inputmode="decimal" placeholder="دفعت كام بالجنيه؟" />${calcBtn('ub-paid')}</div>
+        <div class="lbl">دفعت منين؟</div>
+        ${placePick(places, 'ub-place', defaultPlace(d, places), { only: ['cash', 'wallet', 'drawer'] })}
+        <button class="btn" data-do="buy-units" data-id="${esc(g.id)}">سجّل الشراء</button>
+      </div>
+      ${u.qty ? `
+      <details class="card">
+        <summary>بعت</summary>
+        <input id="us-qty" class="field" inputmode="decimal" placeholder="بعت كام ${esc(g.unit)}؟" />
+        <div class="amount-row"><input id="us-got" class="field grow" inputmode="decimal" placeholder="قبضت كام بالجنيه؟" />${calcBtn('us-got')}</div>
+        <div class="lbl">الفلوس دخلت فين؟</div>
+        ${placePick(places, 'us-place', cashOf(d)?.id, { only: ['cash', 'wallet', 'drawer'] })}
+        <button class="btn2" data-do="sell-units" data-id="${esc(g.id)}">سجّل البيع</button>
+        <p class="hint">البرنامج بيقولك كسبت ولا خسرت، بالمقارنة بمتوسط اللي دفعته.</p>
+      </details>` : ''}
+      ${g.photo ? `<img class="photo" src="${g.photo}" alt="صورة المكان" />` : ''}
+      ${g.note ? `<p class="hint">${esc(g.note)}</p>` : ''}
+      ${drawerEdit(ctx, g)}
+      <p class="hint">لو سجّلت شراء أو بيع غلط، اعكسه من المزيد ← سجل الحركات.</p>`,
+  });
+}
+
+export function drawerScreen(ctx, p, flash) {
+  const { d, places } = ctx;
   const g = d.goals.find((x) => x.id === p.id);
   if (!g) return safesScreen(ctx, p, flash);
+  if (g.unit) return unitDrawerScreen(ctx, g, flash);
   const here = places.find((x) => x.id === g.accountId);
   const bal = here?.balance ?? 0;
   const safe = d.safes.find((s) => s.id === g.safeId);
@@ -106,10 +179,14 @@ export function drawerScreen(ctx, p, flash) {
     back: 'safe', backParams: { id: g.safeId }, tab: 'more', flash, help: 'drawer',
     body: `
       ${g.target ? `<div class="card">${bar(Math.floor((bal * 100) / g.target))}</div>` : ''}
-      <button class="btn" data-go="expense" data-from="${esc(g.accountId)}" data-back="home">اصرف من الدرج على طول</button>
+      ${owedToIt.map((b) => `
+        <div class="card warn-card">
+          <b>${b.toId ? `${esc(name(b.toId))} عليه ${money(leftOf(b))} للدرج ده` : `خدت من الدرج ده ${money(leftOf(b))} وقلت هترجّعهم`}</b>
+          <button class="btn2" data-go="borrows" data-back="home">رجّع</button>
+        </div>`).join('')}
+      ${itOwes.map((b) => `<div class="card warn-card"><b>الدرج ده عليه ${money(leftOf(b))} لـ ${esc(name(b.fromId))}</b><button class="btn2" data-go="borrows" data-back="home">رجّع</button></div>`).join('')}
+      <button class="btn" data-go="expense" data-from="${esc(g.accountId)}">اصرف من الدرج</button>
       <button class="btn2" data-go="count" data-place="${esc(g.accountId)}" data-back="safes">عدّ اللي في الدرج</button>
-      ${itOwes.map((b) => `<div class="card warn-card"><b>الدرج ده عليه ${money(leftOf(b))} لـ ${esc(name(b.fromId))}</b><button class="btn2" data-go="borrows">رجّع</button></div>`).join('')}
-      ${owedToIt.map((b) => `<div class="card"><b>${esc(name(b.toId))} عليه ${money(leftOf(b))} للدرج ده</b></div>`).join('')}
       ${amountCard('حط أو اسحب كام؟', { quick: false, focus: false })}
       ${placePick(places, 'place', defaultPlace(d, places), { only: ['cash', 'wallet', 'drawer'], exclude: g.accountId })}
       ${moreFields(ctx.today)}
@@ -119,22 +196,7 @@ export function drawerScreen(ctx, p, flash) {
       </div>
       ${g.photo ? `<img class="photo" src="${g.photo}" alt="صورة المكان" />` : ''}
       ${g.note ? `<p class="hint">${esc(g.note)}</p>` : ''}
-      <details class="card">
-        <summary>تعديل الدرج</summary>
-        <label class="lbl">الاسم</label>
-        <input id="g-name" class="field" value="${esc(g.name)}" />
-        ${g.kind !== 'debt' ? `<div class="lbl">النوع</div>${pick('g-kind', DRAWER_KINDS, g.kind === 'saving' ? 'saving' : 'other')}` : ''}
-        <div class="lbl">الخزنة</div>
-        ${pick('g-safe', d.safes, g.safeId)}
-        <label class="lbl">الهدف بالجنيه</label>
-        <input id="g-target" class="field" inputmode="decimal" value="${egpValue(g.target)}" />
-        <label class="lbl">ملحوظة</label>
-        <input id="g-note" class="field" value="${esc(g.note)}" />
-        <label class="lbl">${g.photo ? 'صوّر المكان تاني' : 'صورة للمكان'}</label>
-        <input id="g-photo" class="field file" type="file" accept="image/*" capture="environment" />
-        <button class="btn2" data-do="update-drawer" data-id="${esc(g.id)}">احفظ التعديل</button>
-        ${retireButton('goal', g.id, 'الدرج')}
-      </details>
+      ${drawerEdit(ctx, g)}
       ${safe ? '' : '<p class="hint">الخزنة بتاعة الدرج ده اتلغت.</p>'}`,
   });
 }

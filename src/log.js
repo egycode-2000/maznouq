@@ -5,7 +5,7 @@
 import { isReversed } from './ledger.js';
 
 // Entry id prefixes written by the app, and whether the log may undo them.
-const UNDO_HERE = ['exp-', 'inc-', 'tr-', 'sp-', 'gd-', 'gw-', 'dp-', 'rs-', 'dl-', 'pe-', 'put-', 'dy-', 'cover-', 'cnt-'];
+const UNDO_HERE = ['exp-', 'inc-', 'tr-', 'sp-', 'gd-', 'gw-', 'dp-', 'rs-', 'dl-', 'pe-', 'put-', 'dy-', 'cover-', 'cnt-', 'ub-', 'us-'];
 const OWN_SCREEN = {
   'pb-': 'من شاشة الالتزام', 'jp-': 'من شاشة الجمعية', 'jr-': 'من شاشة الجمعية', 'jam-': 'من شاشة الجمعية',
 };
@@ -22,12 +22,17 @@ export function undoRule(book, entry) {
 // The amount of an entry: what moved (the debit side total).
 export const entryAmount = (entry) => entry.lines.reduce((s, l) => s + l.debit, 0);
 
-export function logRows(book, { search = '', month = '' } = {}) {
+// Entries that can be edited from the log: the same questions open again with the old answers.
+export const canEdit = (entry) => ['exp-', 'inc-'].some((p) => entry.id.startsWith(p));
+
+// edits: { [newEntryId]: { prevAmount, hide: [oldEntryId, itsReversalId] } } — an edited entry shows once.
+export function logRows(book, { search = '', month = '', edits = {} } = {}) {
+  const hidden = new Set(Object.values(edits).flatMap((e) => e.hide));
   const words = String(search).trim().toLowerCase();
   const name = (id) => book.accounts.get(id)?.name ?? id;
   return [...book.entries]
     .map((e, order) => ({ e, order }))
-    .filter(({ e }) => !month || e.date.startsWith(month))
+    .filter(({ e }) => !hidden.has(e.id) && (!month || e.date.startsWith(month)))
     .map(({ e, order }) => ({
       id: e.id,
       date: e.date,
@@ -38,6 +43,8 @@ export function logRows(book, { search = '', month = '' } = {}) {
       to: e.lines.filter((l) => l.debit > 0).map((l) => name(l.account)),
       from: e.lines.filter((l) => l.credit > 0).map((l) => name(l.account)),
       undo: undoRule(book, e),
+      edit: canEdit(e) && undoRule(book, e).can,
+      editedFrom: edits[e.id]?.prevAmount ?? null,
       reversal: Boolean(e.reversalOf),
     }))
     .filter((r) => !words || [r.memo, r.note, ...r.to, ...r.from, String(r.amount / 100)].join(' ').toLowerCase().includes(words))

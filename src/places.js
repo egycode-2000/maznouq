@@ -4,6 +4,7 @@
 // Money stays counted as long as it sits in one of these places, until it is recorded as spent.
 import { balanceOf } from './ledger.js';
 import { formatMoney } from './format.js';
+import { isUnit, unitSummary } from './units.js';
 
 export const cashOf = (d) => d.wallets.find((w) => w.kind === 'cash') ?? d.wallets[0];
 
@@ -19,8 +20,8 @@ export function placeList(d, book) {
   for (const s of d.safes) {
     for (const g of d.goals.filter((x) => x.safeId === s.id)) {
       list.push({
-        id: g.accountId, name: g.name, kind: 'drawer', drawerId: g.id, safeId: s.id, safeName: s.name,
-        balance: balanceOf(book, g.accountId),
+        id: g.accountId, name: g.name, kind: isUnit(g) ? 'unit' : 'drawer', drawerId: g.id, safeId: s.id, safeName: s.name,
+        balance: balanceOf(book, g.accountId), target: g.target ?? 0,
       });
     }
   }
@@ -34,9 +35,10 @@ export function placeById(d, book, id) {
 // The safe with its drawers and its total.
 export function safeSummary(d, book, safe) {
   const drawers = d.goals.filter((g) => g.safeId === safe.id).map((g) => ({
-    ...g, balance: balanceOf(book, g.accountId),
+    ...g, balance: balanceOf(book, g.accountId), units: isUnit(g) ? unitSummary(book, d, g) : null,
   }));
-  return { ...safe, drawers, total: drawers.reduce((s, g) => s + g.balance, 0) };
+  // The safe's total counts money only. Gold and the like are listed by quantity, apart.
+  return { ...safe, drawers, total: drawers.filter((g) => !g.units).reduce((s, g) => s + g.balance, 0) };
 }
 
 // Everything you have: cash, each wallet, each safe with its drawers, and the grand total.
@@ -47,7 +49,12 @@ export function moneyPicture(d, book) {
   const safes = d.safes.map((s) => safeSummary(d, book, s));
   const walletsTotal = wallets.reduce((s, w) => s + w.balance, 0);
   const safesTotal = safes.reduce((s, x) => s + x.total, 0);
+  const units = safes.flatMap((s) => s.drawers.filter((g) => g.units).map((g) => ({
+    id: g.id, name: g.name, unit: g.unit, safeName: s.name, ...g.units,
+  })));
   return {
+    units,
+    unitsCost: units.reduce((s, u) => s + u.cost, 0),
     cash: cash.balance,
     wallets,
     walletsTotal,

@@ -7,7 +7,26 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
 
 export const money = (p) => formatMoney(p);
 export const egpValue = (p) => (p ? String(p / 100) : '');
-export const bar = (percent) => `<div class="bar"><i style="width:${Math.min(100, Math.max(0, percent))}%"></i></div>`;
+// A progress bar always says its percentage next to it.
+export const bar = (percent) => {
+  const shown = Math.min(100, Math.max(0, Math.floor(percent)));
+  return `<div class="barline"><div class="bar"><i style="width:${shown}%"></i></div><small>${shown}%</small></div>`;
+};
+export const plain = (p) => formatMoney(p).replace(' ج.م', '');
+
+// The app's round button: a white disc with a coloured ring, a short text inside and its name under it.
+// `attrs` carries what the tap does (data-do / data-go and their values).
+export function circle({ label, sub = '', inner = '', ring = 0, attrs = '', on = false, badge = '' }) {
+  // With no text given, the disc shows the start of the name, so «مواصلات» and «موبايل» do not look the same.
+  const text = inner || [...String(label).replace(/\s/g, '')].slice(0, 3).join('');
+  const size = [...String(text)].length > 3 ? 'num' : ([...String(text)].length > 1 ? 'mid' : '');
+  return `
+    <button type="button" class="circle r${ring % 5} ${on ? 'on' : ''}" ${attrs}>
+      <span class="disc ${size}">${badge ? `<i class="badge">${esc(badge)}</i>` : ''}${esc(text)}</span>
+      <b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}
+    </button>`;
+}
+export const circles = (list) => `<div class="circles">${list.join('')}</div>`;
 
 // Messages starting with ✓ are success notices; anything else is an error.
 export const note = (flash) => {

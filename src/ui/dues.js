@@ -88,12 +88,12 @@ export function billNewScreen(ctx, p, flash) {
       <div class="row"><input id="b-amount" class="field grow" inputmode="decimal" />${calcBtn('b-amount')}</div>
       ${repeating ? `
         <label class="lbl">يوم الاستحقاق في الشهر</label>
-        <input id="b-day" class="field" inputmode="numeric" value="1" />
+        <input id="b-day" class="field" inputmode="numeric" placeholder="مثلا: 1" />
         <label class="lbl">أول شهر</label>
         <input id="b-start" class="field" type="month" value="${ctx.month}" />` : ''}
       ${kind === 'periodic' ? `
         <label class="lbl">كل كام شهر؟</label>
-        <input id="b-every" class="field" inputmode="numeric" value="12" />` : ''}
+        <input id="b-every" class="field" inputmode="numeric" placeholder="مثلا: 12" />` : ''}
       ${kind === 'dated' ? `
         <label class="lbl">تاريخ الاستحقاق</label>
         <input id="b-date" class="field" type="date" value="${ctx.today}" />` : ''}
@@ -191,8 +191,8 @@ export function jamWizardScreen(ctx, p, flash) {
   if (key === 'name') body = input('اسم الجمعية إيه؟', 'placeholder="مثلا: جمعية الشغل"', a.name);
   if (key === 'members') body = input('الجمعية كام نفر؟', 'inputmode="numeric" placeholder="مثلا: 25"', a.members, 'عدد الأنفار هو عدد الشهور.');
   if (key === 'monthly') body = input('بتدفع كام في الشهر؟', 'inputmode="decimal" placeholder="مثلا: 1000"', a.monthly);
-  if (key === 'payDay') body = input('بتدفعها يوم كام في الشهر؟', 'inputmode="numeric" placeholder="مثلا: 10"', a.payDay ?? '1', 'لو أول الشهر اكتب 1.');
-  if (key === 'currentNumber') body = input('إحنا دلوقتي في الشهر كام من الجمعية؟', 'inputmode="numeric"', a.currentNumber ?? '1', `من 1 لـ ${esc(a.members ?? '')}. لو لسه بادئة اكتب 1.`);
+  if (key === 'payDay') body = input('بتدفعها يوم كام في الشهر؟', 'inputmode="numeric" placeholder="مثلا: 10"', a.payDay ?? '', 'لو أول الشهر اكتب 1.');
+  if (key === 'currentNumber') body = input('إحنا دلوقتي في الشهر كام من الجمعية؟', 'inputmode="numeric" placeholder="مثلا: 1"', a.currentNumber ?? '', `من 1 لـ ${esc(a.members ?? '')}. لو لسه بادئة اكتب 1.`);
   if (key === 'currentPaid') body = choice('قسط الشهر ده اتدفع؟', [{ id: 'no', name: 'لسه' }, { id: 'yes', name: 'أيوه اتدفع' }], a.currentPaid ?? 'no');
   if (key === 'received') body = choice('قبضت الجمعية؟', [{ id: 'no', name: 'لسه ما قبضتش' }, { id: 'before', name: 'أيوه قبضت' }], a.received ?? 'no');
   if (key === 'detail') {
