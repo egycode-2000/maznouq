@@ -53,7 +53,8 @@ async function wipeDevice() {
     return render();
   }
   await clearAll();
-  Object.assign(session, { unlocked: false, pin: '', pinFails: 0, lock: null, draft: freshDraft(), setupStep: 0 });
+  // Straight to the setup with the restore option: someone wiping a forgotten code already knows the app.
+  Object.assign(session, { unlocked: false, pin: '', pinFails: 0, lock: null, draft: freshDraft(), setupStep: 0, introDone: true });
   session.route = { name: 'home', p: {} };
   session.flash = '✓ البيانات اتمسحت من الجهاز. رجّعها من النسخة الاحتياطية تحت، أو ابدأ من الأول';
   return render();
@@ -112,7 +113,8 @@ function handleLocal(target) {
   }
   const calc = target.closest('[data-calc]');
   if (calc) {
-    openCalc(calc.dataset.calc);
+    // From the home screen the result can start an expense or an income with the amount already typed.
+    openCalc(calc.dataset.calc, calc.dataset.calc ? {} : { onRecord: (kind, value) => go(kind === 'income' ? 'income-new' : 'expense', { amount: value }) });
     return true;
   }
   const help = target.closest('[data-help]');

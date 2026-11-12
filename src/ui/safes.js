@@ -210,7 +210,7 @@ export function walletsScreen(ctx, p, flash) {
     title: 'الكاش والمحافظ', back: 'more', tab: 'more', flash, help: 'wallets',
     body: `
       <div class="card">
-        <div class="row"><b>الكاش (في جيبك)</b><b>${money(balanceOfPlace(cash.id))}</b></div>
+        <div class="row"><b>الكاش (الفلوس اللي معاك)</b><b>${money(balanceOfPlace(cash.id))}</b></div>
         <input class="field" id="wn-${esc(cash.id)}" value="${esc(cash.name)}" />
       </div>
       ${d.wallets.filter((w) => w !== cash).map((w) => `

@@ -10,6 +10,7 @@ import { placeList, checkSpend, rememberPlace } from './places.js';
 import { undoEntry } from './undo.js';
 import { entryAmount, canEdit } from './log.js';
 import { nowStamp } from './state.js';
+import { limitStatus } from './reports.js';
 
 // Old screen names that now start a flow (so every old button keeps working).
 export const FLOW_ROUTES = { expense: 'expense', 'income-new': 'income', split: 'split', 'daily-new': 'daily' };
@@ -22,6 +23,8 @@ const P = (text) => {
 export function newFlow(kind, p = {}) {
   const data = { amount: '', lines: {}, repays: {}, date: '', note: '', saveName: '' };
   const flow = { kind, step: 'amount', history: [], data, back: p.back ?? 'home' };
+  // An amount handed over by the calculator («سجّله مصروف») is already typed in.
+  if (p.amount && P(p.amount) > 0) data.amount = String(P(p.amount) / 100);
   if (kind === 'expense' && p.from) Object.assign(data, { from: p.from, fromLocked: true });
   if (kind === 'income') Object.assign(data, { source: p.id ?? '', to: p.to ?? '' });
   if (kind === 'split') {
@@ -332,9 +335,16 @@ export function commitExpense(st, flow, today) {
   rememberPlace(st.d, st.book, place.id);
   noteEdit(st.d, d.editOf, entryId, prev);
   const onWhat = catName && catName !== place.name ? ` على ${catName}` : '';
+  // Close to or past this category's monthly limit: a warning, never a block.
+  const lim = limitStatus(st.book, st.d, categoryId, date.slice(0, 7));
+  const limitText = {
+    near: `${catName} وصل ${lim.percent}% من حدّه`,
+    over: `${catName} عدّى الحد بـ ${formatMoney(lim.over)} (${lim.percent}%)`,
+  }[lim.level] ?? '';
   return {
     entryId,
     undoIds: [entryId],
+    warn: limitText,
     text: `${d.editOf ? 'اتعدّل' : 'اتسجل'}: مصروف ${formatMoney(amount)} من ${place.name}${onWhat}${d.back === 'yes' && goal ? ' (هترجّعهم)' : ''}${warn}`,
   };
 }

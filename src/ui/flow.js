@@ -1,11 +1,12 @@
 // الأسئلة واحدة واحدة: one question per screen for income, expense, splitting and setting up a daily split.
 // The questions and their order come from src/flow.js; this file only draws the current one.
-import { esc, money, plain, circle, circles, calcBtn, dateField, noteField, note, footer, ICONS } from './common.js';
+import { esc, money, plain, circle, circles, calcBtn, dateField, note, footer, ICONS } from './common.js';
 import { amountOf, poolOf, restOf, shortOf, linesOf, MISC } from '../flow.js';
 import { cashOf, defaultPlace } from '../places.js';
 import { openBorrows } from '../reports.js';
 import { leftOf } from '../borrows.js';
 import { hasGoal } from '../moves.js';
+import { limitStatus } from '../reports.js';
 
 const TITLES = {
   expense: {
@@ -54,15 +55,16 @@ function amountStep(flow, ctx) {
     <div class="keys">
       ${['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map((k) => `<button type="button" class="key" data-key="${k}">${k === 'del' ? '⌫' : k}</button>`).join('')}
     </div>
+    ${flow.kind === 'expense' || flow.kind === 'income' ? `
+    <input id="note" class="field" placeholder="ملحوظة (اختياري): ${flow.kind === 'expense' ? 'مثلا غدا مع الشغل' : 'مثلا مرتب شهر نوفمبر'}" value="${esc(d.note)}" />` : ''}
     <div class="row">
       ${calcBtn('flow-amount')}
       <button class="btn grow" data-do="flow-ok">التالي</button>
     </div>
     ${flow.kind === 'expense' || flow.kind === 'income' ? `
     <details class="card">
-      <summary>التاريخ والملحوظة وصورة الفاتورة (اختياري)</summary>
+      <summary>التاريخ وصورة الفاتورة (اختياري)</summary>
       ${dateField(ctx.today, 'date', d.date || ctx.today)}
-      ${noteField('note', d.note)}
       <label class="lbl" for="photo">صورة الفاتورة</label>
       <input id="photo" class="field file" type="file" accept="image/*" />
     </details>` : ''}`;
@@ -181,8 +183,16 @@ function stepBody(flow, ctx) {
     }
     case 'cat': {
       const sel = f.category || d.settings.lastCategory;
+      // Under each category: how much of its monthly limit is used (yellow from the warning, red past it).
+      const month = (f.date || ctx.today).slice(0, 7);
+      const limitSub = (id) => {
+        const s = limitStatus(ctx.book, d, id, month);
+        if (s.level === 'none') return { sub: d.categories.some((c) => d.budgets[c.id]) ? 'مالوش حد' : '' };
+        if (s.level === 'over') return { sub: `${s.percent}% عدّى الحد`, subClass: 'over' };
+        return { sub: `${s.percent}% من الحد`, subClass: s.level === 'near' ? 'near' : '' };
+      };
       return circles([
-        ...d.categories.map((c, i) => circle({ label: c.name, ring: i, on: c.id === sel, attrs: pickAttr(c.id) })),
+        ...d.categories.map((c, i) => circle({ label: c.name, ring: i, on: c.id === sel, attrs: pickAttr(c.id), ...limitSub(c.id) })),
         circle({ label: 'باب جديد', inner: '+', ring: 4, attrs: pickAttr('__new') }),
       ]);
     }

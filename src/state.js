@@ -37,7 +37,7 @@ export function withDefaults(data) {
   if (goals.length && !safes.length) safes = [{ id: 'safe-1', name: 'خزنتي', note: '' }];
   goals = goals.map((g) => (safes.some((s) => s.id === g.safeId) ? g : { ...g, safeId: safes[0].id }));
 
-  const settings = { theme: 'auto', autoExamples: true, sound: true, seen: {}, ...(data.settings ?? {}) };
+  const settings = { theme: 'auto', autoExamples: true, sound: true, limitWarn: 80, seen: {}, ...(data.settings ?? {}) };
   let templates = data.templates ?? [];
   const goalAccount = (id) => goals.find((g) => g.id === id)?.accountId ?? id;
   const oldRows = (rows) => Object.entries(rows ?? {}).map(([target, r]) => ({

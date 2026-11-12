@@ -1,5 +1,5 @@
 // Offline support: caches the app shell so مزنوق opens without internet.
-const CACHE = 'maznouq-shell-v11';
+const CACHE = 'maznouq-shell-v12';
 const SHELL = [
   './',
   './index.html',
@@ -8,6 +8,8 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './src/app.js',
+  './src/ui/intro.js',
+  './src/ui/review.js',
   './src/ctl/flow.js',
   './src/flow.js',
   './src/sound.js',

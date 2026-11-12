@@ -3,9 +3,11 @@
 import { setupScreen, STEPS, homeScreen, moreScreen, settingsScreen, aboutScreen } from './ui/home.js';
 import {
   incomeScreen, sourceNewScreen, sourceEditScreen, transferScreen, templatesScreen, templateScreen, dailyScreen,
-  logScreen, borrowsScreen, budgetsScreen, categoriesScreen,
+  logScreen, borrowsScreen, categoriesScreen,
 } from './ui/money.js';
 import { flowScreen } from './ui/flow.js';
+import { todayScreen, categoryScreen } from './ui/review.js';
+import { introScreen } from './ui/intro.js';
 import { safesScreen, safeScreen, drawerNewScreen, drawerScreen, walletsScreen } from './ui/safes.js';
 import { countScreen } from './ui/count.js';
 import { lockScreen } from './ui/lock.js';
@@ -32,7 +34,12 @@ export const SCREENS = {
   daily: dailyScreen,
   log: logScreen,
   borrows: borrowsScreen,
-  budgets: budgetsScreen,
+  // «الميزانية» moved inside «أوجه الصرف»: the old name still opens it.
+  budgets: categoriesScreen,
+  category: categoryScreen,
+  // The intro again, from «عن مزنوق».
+  intro: (ctx, p) => introScreen(Number(p.i ?? 0), { fromAbout: true }),
+  today: todayScreen,
   categories: categoriesScreen,
   safes: safesScreen,
   safe: safeScreen,

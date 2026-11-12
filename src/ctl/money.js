@@ -97,24 +97,23 @@ export const moneyActions = {
     s.kind = v('src-kind') === 'monthly' ? 'monthly' : 'open';
   }, 'income'),
 
-  'save-budgets': () => change((st) => {
+  // Names and monthly limits of the spending categories, saved together from «أوجه الصرف».
+  'save-categories': () => change((st) => {
     for (const c of st.d.categories) {
+      if (document.getElementById(`cn-${c.id}`)) c.name = renameAccount(st.book, c.id, v(`cn-${c.id}`));
       if (!document.getElementById(`bud-${c.id}`)) continue;
       const amount = piasters(`bud-${c.id}`);
       if (amount > 0) st.d.budgets[c.id] = amount;
       else delete st.d.budgets[c.id];
     }
-  }, 'budgets'),
-  'save-categories': () => change((st) => {
-    for (const c of st.d.categories) {
-      if (document.getElementById(`cn-${c.id}`)) c.name = renameAccount(st.book, c.id, v(`cn-${c.id}`));
-    }
-  }, 'categories'),
+  }, 'categories', {}, '✓ اتحفظ'),
   'add-category': () => change((st) => {
     const name = toEnglishDigits(String(v('cat-new'))).trim();
     if (name.length < 2) throw new Error('اكتب الاسم');
     const id = nowStamp('e');
     addAccount(st.book, { id, name, type: 'expense' });
     st.d.categories.push({ id, name });
-  }, 'categories'),
+    const limit = piasters('cat-new-limit');
+    if (limit > 0) st.d.budgets[id] = limit;
+  }, 'categories', {}, '✓ اتضاف'),
 };

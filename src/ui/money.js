@@ -1,10 +1,10 @@
 // Money screens that are not question-by-question: income sources, transfer, saved splits (daily too),
-// the log, borrows, budgets and spending categories. Expense, income and «وزّع» live in ui/flow.js.
+// the log, borrows and spending categories (with their monthly limits). Expense, income and «وزّع» live in ui/flow.js.
 import {
-  esc, money, egpValue, bar, pick, placePick, amountCard, moreFields, noteField, item, page,
+  esc, money, egpValue, bar, limitBar, pick, placePick, amountCard, moreFields, noteField, item, page,
   retireButton, archivedBlock, photoBtn,
 } from './common.js';
-import { incomeFrom, spentIn, openBorrows, monthTotals } from '../reports.js';
+import { incomeFrom, openBorrows, monthTotals, limitsReport } from '../reports.js';
 import { pendingDays, dailyTotal } from '../daily.js';
 import { logRows } from '../log.js';
 import { leftOf } from '../borrows.js';
@@ -245,43 +245,35 @@ export function borrowsScreen(ctx, p, flash) {
 }
 
 // ---------- Budgets and spending categories ----------
-export function budgetsScreen(ctx, p, flash) {
-  const { d, book, month } = ctx;
-  const rows = d.categories.map((c) => {
-    const limit = d.budgets[c.id] ?? 0;
-    const spent = spentIn(book, c.id, month);
-    return `
-      <div class="card">
-        <div class="row"><b>${esc(c.name)}</b><span class="${limit && spent > limit ? 'neg' : ''}">${money(spent)}${limit ? ` من ${money(limit)}` : ''}</span></div>
-        ${limit ? bar(Math.floor((spent * 100) / limit)) : ''}
-        <input class="field" inputmode="decimal" id="bud-${esc(c.id)}" placeholder="الحد الشهري بالجنيه" value="${egpValue(limit)}" />
-      </div>`;
-  }).join('');
-  return page({
-    title: 'الميزانية', sub: 'حد لكل وجه صرف في الشهر', back: 'more', tab: 'more', flash, help: 'budgets',
-    body: `${rows || '<p class="hint">مفيش أوجه صرف.</p>'}<button class="btn" data-do="save-budgets">احفظ الميزانية</button>`,
-  });
-}
-
 export function categoriesScreen(ctx, p, flash) {
-  const { d } = ctx;
+  const { d, book, month } = ctx;
+  const warnAt = d.settings.limitWarn ?? 80;
+  const { rows } = limitsReport(book, d, month);
   return page({
-    title: 'أوجه الصرف', back: 'more', tab: 'more', flash, help: 'categories',
+    title: 'أوجه الصرف', sub: 'الحد الشهري والكشف لكل وجه', back: 'more', tab: 'more', flash, help: 'categories',
     body: `
-      <div class="card">
-        ${d.categories.map((c) => `
+      <p class="hint">اكتب حد شهري لأي وجه صرف (اختياري). لما توصل ${warnAt}% بيجيلك تنبيه، ولو عدّيت مش هيمنعك.</p>
+      ${rows.map((c) => `
+        <div class="card">
           <div class="row">
-            <input class="field grow" id="cn-${esc(c.id)}" value="${esc(c.name)}" />
-            <button class="linkbtn danger" data-do="retire" data-kind="category" data-id="${esc(c.id)}">إلغاء</button>
-          </div>`).join('')}
-        ${d.categories.length ? '<button class="btn2" data-do="save-categories">احفظ الأسماء</button>' : '<p class="hint">مفيش أوجه صرف.</p>'}
-        <p class="hint">اللي عليه مصاريف بيختفي بس، ومصاريفه تفضل محسوبة.</p>
-      </div>
+            <input class="field grow" id="cn-${esc(c.id)}" value="${esc(c.name)}" aria-label="اسم وجه الصرف" />
+          </div>
+          <div class="row"><span class="hint">الشهر ده</span><span class="${c.level === 'over' ? 'neg' : ''}">${money(c.spent)}${c.limit ? ` من ${money(c.limit)}` : ''}</span></div>
+          ${c.limit ? limitBar(c.percent, warnAt) : '<span class="hint">مالوش حد</span>'}
+          <div class="limit-row">
+            <input class="field" inputmode="decimal" id="bud-${esc(c.id)}" placeholder="الحد الشهري (اختياري)" value="${egpValue(c.limit)}" />
+            <button class="btn2 mini-btn" data-go="category" data-id="${esc(c.id)}">كشف ←</button>
+          </div>
+          <button class="linkbtn danger" data-do="retire" data-kind="category" data-id="${esc(c.id)}">إلغاء الوجه ده</button>
+        </div>`).join('') || '<p class="hint">مفيش أوجه صرف.</p>'}
+      ${rows.length ? '<button class="btn" data-do="save-categories">احفظ الأسماء والحدود</button>' : ''}
+      <p class="hint">اللي عليه مصاريف بيختفي بس لما تلغيه، ومصاريفه تفضل محسوبة.</p>
       ${archivedBlock(ctx.archived, 'category', 'أوجه صرف ملغية')}
       <div class="card">
         <div class="lbl">وجه صرف جديد</div>
         <input id="cat-new" class="field" placeholder="مثلا: بنزين" />
-        <button class="btn" data-do="add-category">ضيف</button>
+        <input id="cat-new-limit" class="field" inputmode="decimal" placeholder="الحد الشهري (اختياري)" />
+        <button class="btn2" data-do="add-category">ضيف</button>
       </div>`,
   });
 }

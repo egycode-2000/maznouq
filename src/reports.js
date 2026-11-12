@@ -9,6 +9,8 @@ import { moneyPicture } from './places.js';
 import { peopleTotals } from './people.js';
 import { pendingDays, dailyTotal } from './daily.js';
 import { leftOf } from './borrows.js';
+import { undoRule, canEdit } from './log.js';
+import { showDate, showMonth, formatMoney } from './format.js';
 
 const monthStart = (month) => `${month}-01`;
 const monthEnd = (month) => `${month}-31`;
@@ -193,4 +195,130 @@ export function debtsReport(book, d) {
     ...t, [k]: rows.filter((r) => r.debt.direction === dir).reduce((s, r) => s + r[k], 0),
   }), {});
   return { rows, out: totals('out'), in: totals('in') };
+}
+
+// ---------- Spending limits (حد أقصى لوجه الصرف) ----------
+// One function decides a category's percentage and level. The question «صرفت في إيه؟», the bar after saving,
+// «أوجه الصرف», the category statement and the home circle «عدّى الحد» all read it.
+// level: 'none' (no limit), 'ok', 'near' (from the warning percentage, 80 by default), 'over' (past 100).
+export function limitStatus(book, d, categoryId, month) {
+  const limit = d.budgets?.[categoryId] ?? 0;
+  const spent = spentIn(book, categoryId, month);
+  if (!(limit > 0)) return { spent, limit: 0, percent: null, level: 'none', over: 0 };
+  const percent = Math.floor((spent * 100) / limit);
+  const warnAt = d.settings?.limitWarn ?? 80;
+  return {
+    spent, limit, percent, over: Math.max(0, spent - limit),
+    level: spent > limit ? 'over' : (percent >= warnAt ? 'near' : 'ok'),
+  };
+}
+
+export function limitsReport(book, d, month) {
+  const rows = d.categories.map((c) => ({ id: c.id, name: c.name, ...limitStatus(book, d, c.id, month) }));
+  return { rows, over: rows.filter((r) => r.level === 'over') };
+}
+
+// ---------- Statements: what happened on one category in a month, and on one day ----------
+// A move and its undo inside the same period cancel out and disappear together, as if it never happened.
+// An undo of an older move shows as its own line («اتلغت حركة يوم ...»). So the lines always add up to
+// exactly the totals above (spentIn, periodTotals): the same source, nothing re-computed differently.
+function inPeriod(book, from, to) {
+  const list = book.entries.filter((e) => e.date >= from && e.date <= to);
+  const ids = new Set(list.map((e) => e.id));
+  const gone = new Set();
+  for (const e of list) {
+    if (e.reversalOf && ids.has(e.reversalOf)) gone.add(e.id).add(e.reversalOf);
+  }
+  return list.filter((e) => !gone.has(e.id));
+}
+
+const accName = (book, id) => book.accounts.get(id)?.name ?? id;
+const typeOf = (book, id) => book.accounts.get(id)?.type;
+
+function rowOf(book, d, e, amount, title, sub) {
+  const original = e.reversalOf ? book.entries.find((x) => x.id === e.reversalOf) : null;
+  const edit = d.edits?.[e.id];
+  return {
+    id: e.id, date: e.date, amount, title, note: e.note ?? '',
+    sub: original ? `اتلغت حركة يوم ${showDate(original.date)}` : sub,
+    cancelled: Boolean(original),
+    editedFrom: edit ? edit.prevAmount : null,
+    undo: undoRule(book, e),
+    edit: canEdit(e) && undoRule(book, e).can,
+  };
+}
+
+// Where the money of an entry came from and went to, in plain words.
+function sides(book, e) {
+  const from = e.lines.filter((l) => l.credit > 0 && ['asset', 'liability'].includes(typeOf(book, l.account))).map((l) => accName(book, l.account));
+  const to = e.lines.filter((l) => l.debit > 0 && ['asset', 'liability'].includes(typeOf(book, l.account))).map((l) => accName(book, l.account));
+  return { from: from.join('، '), to: to.join('، ') };
+}
+
+export function categoryStatement(book, d, categoryId, month) {
+  const rows = inPeriod(book, `${month}-01`, `${month}-31`)
+    .filter((e) => e.lines.some((l) => l.account === categoryId))
+    .map((e, order) => {
+      const amount = e.lines.filter((l) => l.account === categoryId).reduce((s, l) => s + l.debit - l.credit, 0);
+      const { from } = sides(book, e);
+      return { ...rowOf(book, d, e, amount, accName(book, categoryId), from ? `من ${from}` : ''), order };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date) || b.order - a.order);
+  return { rows, total: spentIn(book, categoryId, month), limit: limitStatus(book, d, categoryId, month) };
+}
+
+// The last months of one category, oldest first, for the small chart.
+export function categoryMonths(book, d, categoryId, month, count = 6) {
+  const list = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const m = addMonths(month, -i);
+    list.push({ month: m, spent: spentIn(book, categoryId, m) });
+  }
+  return { list, limit: d.budgets?.[categoryId] ?? 0 };
+}
+
+// مراجعة النهارده: every move of one day, in three groups, each line on its own.
+export function dayReport(book, d, day) {
+  const income = [];
+  const expense = [];
+  const other = [];
+  inPeriod(book, day, day).forEach((e, order) => {
+    const { from, to } = sides(book, e);
+    const inc = e.lines.filter((l) => typeOf(book, l.account) === 'income');
+    const exp = e.lines.filter((l) => typeOf(book, l.account) === 'expense');
+    if (inc.length) {
+      const amount = inc.reduce((s, l) => s + l.credit - l.debit, 0);
+      income.push({ ...rowOf(book, d, e, amount, inc.map((l) => accName(book, l.account)).join('، '), to ? `نزل في ${to}` : ''), order });
+    }
+    if (exp.length) {
+      const amount = exp.reduce((s, l) => s + l.debit - l.credit, 0);
+      expense.push({ ...rowOf(book, d, e, amount, exp.map((l) => accName(book, l.account)).join('، '), from ? `من ${from}` : ''), order });
+    }
+    if (!inc.length && !exp.length) {
+      const amount = e.lines.reduce((s, l) => s + l.debit, 0);
+      other.push({ ...rowOf(book, d, e, amount, e.memo, [from && `من ${from}`, to && `إلى ${to}`].filter(Boolean).join(' ← ')), order });
+    }
+  });
+  const newest = (a, b) => b.order - a.order;
+  const totals = periodTotals(book, day, day);
+  return {
+    income: income.sort(newest), expense: expense.sort(newest), other: other.sort(newest),
+    totals, count: income.length + expense.length + other.length,
+  };
+}
+
+// The category statement as a message (WhatsApp): the same lines and the same total as the screen.
+export function categoryStatementText(book, d, categoryId, month) {
+  const st = categoryStatement(book, d, categoryId, month);
+  const name = accName(book, categoryId);
+  const lines = [...st.rows].reverse().map((r) => (r.amount < 0
+    ? `${showDate(r.date)}: تم تنزيل ${formatMoney(-r.amount)} (${r.sub})`
+    : `${showDate(r.date)}: ${formatMoney(r.amount)}${r.sub ? ` ${r.sub}` : ''}${r.note ? ` · ${r.note}` : ''}`));
+  const lim = st.limit;
+  return [
+    `كشف ${name} · ${showMonth(month)}`,
+    ...lines,
+    `الإجمالي: ${formatMoney(st.total)}`,
+    lim.limit ? `الحد: ${formatMoney(lim.limit)} (${lim.percent}%)` : '',
+  ].filter(Boolean).join('\n');
 }

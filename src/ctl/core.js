@@ -1,6 +1,7 @@
 // The app's running state, the router, and helpers every action uses.
 // Actions change the ledger through change(), which saves and then opens the next screen.
 import { SCREENS, setupScreen, lockScreen } from '../views.js';
+import { introScreen } from '../ui/intro.js';
 import { photoKey, markPhoto } from '../photos.js';
 import { loadState, persist, todayIso, nowStamp } from '../state.js';
 import { saveValue } from '../storage.js';
@@ -46,6 +47,9 @@ export const session = {
   // The question-by-question flow in progress (income, expense, split, daily), and the last thing it saved.
   flow: null,
   saved: null,
+  // The intro screens before the first setup: which one is showing, and whether they were passed.
+  intro: 0,
+  introDone: false,
 };
 
 export { nowStamp };
@@ -89,7 +93,10 @@ export async function render() {
   const flash = session.flash;
   session.flash = '';
   session.lock = state?.d.settings.lock ?? null;
-  if (!state) {
+  if (!state && !session.introDone) {
+    session.ctx = null;
+    root.innerHTML = introScreen(session.intro);
+  } else if (!state) {
     session.ctx = null;
     root.innerHTML = setupScreen(session.draft, session.setupStep, flash);
   } else if (session.lock && !session.unlocked) {
@@ -128,8 +135,8 @@ function showSaved() {
   }
   s.shown = true;
   const bar = document.createElement('div');
-  bar.className = 'savedbar';
-  bar.innerHTML = `<span>✓ ${esc(s.text)}</span>
+  bar.className = `savedbar ${s.warn ? 'warnbar' : ''}`;
+  bar.innerHTML = `<span>✓ ${esc(s.text)}${s.warn ? `<br>⚠ ${esc(s.warn)}` : ''}</span>
     ${s.undoIds.length ? '<button type="button" data-do="undo-saved">تراجع</button>' : ''}
     ${s.entryId ? `<button type="button" data-do="edit-entry" data-id="${esc(s.entryId)}">عدّل</button>` : ''}`;
   root.querySelector('.body')?.prepend(bar);

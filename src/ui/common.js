@@ -14,16 +14,29 @@ export const bar = (percent) => {
 };
 export const plain = (p) => formatMoney(p).replace(' ج.م', '');
 
+// A limit bar is not stopped at 100%: at 110% the extra part shows red past a mark at the limit,
+// so you see you went over (yellow from the warning percentage, 80 by default).
+export function limitBar(percent, warnAt = 80) {
+  const pct = Math.max(0, Math.floor(percent));
+  const scale = Math.max(100, pct);
+  const inside = (Math.min(pct, 100) * 100) / scale;
+  const over = (Math.max(0, pct - 100) * 100) / scale;
+  return `<div class="barline ${pct > 100 ? 'over' : ''}"><div class="bar2">
+    <i class="${pct >= warnAt && pct <= 100 ? 'warn' : ''}" style="width:${inside.toFixed(1)}%"></i><em style="width:${over.toFixed(1)}%"></em>
+    ${pct > 100 ? `<span class="lim" style="right:${((100 * 100) / scale).toFixed(1)}%"></span>` : ''}
+  </div><small>${pct}%</small></div>`;
+}
+
 // The app's round button: a white disc with a coloured ring, a short text inside and its name under it.
 // `attrs` carries what the tap does (data-do / data-go and their values).
-export function circle({ label, sub = '', inner = '', ring = 0, attrs = '', on = false, badge = '' }) {
+export function circle({ label, sub = '', subClass = '', inner = '', ring = 0, attrs = '', on = false, badge = '' }) {
   // With no text given, the disc shows the start of the name, so «مواصلات» and «موبايل» do not look the same.
   const text = inner || [...String(label).replace(/\s/g, '')].slice(0, 3).join('');
   const size = [...String(text)].length > 3 ? 'num' : ([...String(text)].length > 1 ? 'mid' : '');
   return `
     <button type="button" class="circle r${ring % 5} ${on ? 'on' : ''}" ${attrs}>
       <span class="disc ${size}">${badge ? `<i class="badge">${esc(badge)}</i>` : ''}${esc(text)}</span>
-      <b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}
+      <b>${esc(label)}</b>${sub ? `<small class="${subClass}">${esc(sub)}</small>` : ''}
     </button>`;
 }
 export const circles = (list) => `<div class="circles">${list.join('')}</div>`;
@@ -172,14 +185,17 @@ function nav(tab) {
 }
 
 // Every screen: header (back + title + «مثال»), the body, the brand footer and the bottom bar.
-export function page({ title, sub = '', back = null, backParams = {}, tab = '', body, flash = '', help = '' }) {
+export function page({ title, sub = '', back = null, backParams = {}, tab = '', body, flash = '', help = '', calc = false }) {
   const data = Object.entries(backParams).map(([k, val]) => `data-${k}="${esc(val)}"`).join(' ');
   return `
     <section class="phone">
       <header class="top">
         <div class="toprow">
           ${back ? `<button class="backbtn" data-go="${back}" ${data}>${ICONS.back}<span>رجوع</span></button>` : '<span></span>'}
-          ${help ? `<button class="helpbtn" data-help="${help}">${ICONS.help}<span>مثال</span></button>` : ''}
+          <span class="topbtns">
+            ${calc ? `<button type="button" class="calc-top" data-calc="" aria-label="آلة حاسبة">${ICONS.calc}</button>` : ''}
+            ${help ? `<button class="helpbtn" data-help="${help}">${ICONS.help}<span>مثال</span></button>` : ''}
+          </span>
         </div>
         <h1>${esc(title)}</h1>
         ${sub ? `<p>${esc(sub)}</p>` : ''}

@@ -1,5 +1,6 @@
 // Settings, backup, the log (search and undo), and cancelling or restoring items.
-import { session, go, change, today, v, nowStamp } from './core.js';
+import { session, go, render, change, today, v, nowStamp } from './core.js';
+import { toEnglishDigits } from '../format.js';
 import { exportBackup } from '../state.js';
 import { undoEntry } from '../undo.js';
 import { tick } from '../sound.js';
@@ -32,7 +33,23 @@ export const systemActions = {
   'log-search': () => go('log', { q: v('log-q'), m: v('log-m') }),
   'undo-entry': (p) => change((st) => {
     undoEntry(st.book, st.d, p.id, { stamp: nowStamp, date: today() });
-  }, 'log', () => session.route.p, '✓ اتعكست الحركة والفلوس رجعت مكانها'),
+  }, () => session.route.name, () => session.route.p, '✓ اتعكست الحركة والفلوس رجعت مكانها'),
+  // The intro screens: before the first setup they lead to it; from «عن مزنوق» they go back there.
+  'intro-next': (p) => {
+    if (p.about) return go('intro', { i: p.i });
+    session.intro = Number(p.i);
+    return render();
+  },
+  'intro-done': (p) => {
+    if (p.about) return go('about');
+    session.introDone = true;
+    return render();
+  },
+  'save-limit-warn': () => change((st) => {
+    const n = Math.round(Number(toEnglishDigits(String(v('limit-warn'))).trim()));
+    if (!(n >= 10 && n <= 100)) throw new Error('اكتب نسبة من 10 لـ 100');
+    st.d.settings.limitWarn = n;
+  }, 'settings', {}, '✓ اتحفظت نسبة التنبيه'),
   'toggle-sound': () => change((st) => {
     st.d.settings.sound = !st.d.settings.sound;
     if (st.d.settings.sound) tick();

@@ -1,6 +1,6 @@
 // First-run setup, the home screen, «المزيد», settings and «عن مزنوق».
 import { esc, money, item, page, note, footer, ICONS } from './common.js';
-import { homeSummary } from '../reports.js';
+import { homeSummary, dayReport, limitsReport } from '../reports.js';
 import { backupDue } from '../state.js';
 import { lockSettings } from './lock.js';
 import { cashOf } from '../places.js';
@@ -28,7 +28,7 @@ export function setupScreen(draft, step, flash = '') {
       <p class="hint">اكتب اللي معاك دلوقتي. ده هيبقى بداية الحساب، وتقدر تعدّله بعدين.</p>
       ${draft.wallets.map((w, i) => (i === 0 ? `
         <div class="card">
-          <div class="lbl">الكاش اللي في جيبك</div>
+          <div class="lbl">الكاش اللي معاك دلوقتي</div>
           <input class="field" data-w-open="0" inputmode="decimal" value="${esc(w.opening)}" placeholder="المبلغ بالجنيه" data-autofocus />
         </div>` : `
         <div class="card">
@@ -120,7 +120,7 @@ function hubStage(hub, open) {
     <button type="button" class="hub-big ${n ? 'pressed' : ''} ${hub.neg ? 'neg' : ''}" style="left:${cx}px;top:${cy}px;width:${dia}px;height:${dia}px" ${tap}>
       <span class="l">${esc(hub.label)}</span>
       <span class="v" style="font-size:${n ? 22 : 28}px">${esc(hub.value)}</span>
-      <span class="h">${esc(hub.go ? 'اضغط تفتح' : (n ? 'اضغط تاني يقفل' : `اضغط · ${hub.branches.length} اختيارات`))}</span>
+      <span class="h">${esc(hub.go ? 'اضغط تفتح' : (n ? 'اضغط تاني يقفل' : `${hub.id === 'pocket' ? 'الفلوس اللي معاك · ' : ''}اضغط · ${hub.branches.length} اختيارات`))}</span>
     </button>`;
   return `<div class="hubwrap"><div class="hubstage" style="height:${height}px"><svg width="390" height="${height}" aria-hidden="true">${svg}</svg>${html}</div></div>`;
 }
@@ -131,7 +131,7 @@ function hubMini(hub, i) {
     : `data-go="home" data-hub="${hub.id}" data-open="1"`;
   return `
     <button type="button" class="hub-mini ${hub.alert ? 'alert' : ''}" ${tap}>
-      <span class="c ${hub.neg ? 'neg' : ''}" style="border-color:${RING[hub.ring ?? i % 5]}">${hub.go ? '' : `<i class="n">${hub.branches.length}</i>`}${esc(hub.value.replace(' ج.م', ''))}</span>
+      <span class="c ${hub.neg ? 'neg' : ''}" style="border-color:${hub.red ? 'var(--danger)' : RING[hub.ring ?? i % 5]}">${hub.go ? '' : `<i class="n">${hub.branches.length}</i>`}${esc(hub.value.replace(' ج.م', ''))}</span>
       <b>${esc(hub.label)}</b>
       <span>${esc(hub.hint ?? '')}</span>
     </button>`;
@@ -144,13 +144,13 @@ export function homeScreen(ctx, p, flash) {
   const cashId = cashOf(d)?.id ?? '';
 
   const hubs = [{
-    id: 'pocket', label: 'في جيبك', value: money(pic.cash), neg: pic.cash < 0, ring: 2, hint: 'الكاش، مصروفك',
+    id: 'pocket', label: 'الكاش', value: money(pic.cash), neg: pic.cash < 0, ring: 2, hint: 'الفلوس اللي معاك',
     branches: [
       { icon: '−', title: 'مصروف', sub: 'سجّل اللي صرفته', go: 'expense' },
       { icon: '+', title: 'دخل', sub: 'فلوس دخلتلك', go: 'income-new' },
       { icon: '÷', title: 'وزّع', sub: 'على الأدراج', go: 'split' },
       { icon: '↔', title: 'تحويل', sub: 'وسحب كاش', go: 'transfer' },
-      { icon: '#', title: 'عدّ الكاش', sub: 'طابق اللي في جيبك', go: 'count', params: { place: cashId } },
+      { icon: '#', title: 'عدّ الكاش', sub: 'طابق اللي معاك', go: 'count', params: { place: cashId } },
     ],
   }, {
     id: 'total', label: 'إجمالي فلوسك', value: money(pic.total), neg: pic.total < 0, ring: 0, hint: 'كاش ومحافظ وخزن',
@@ -176,6 +176,22 @@ export function homeScreen(ctx, p, flash) {
       { icon: '≡', title: 'تقرير الديون', sub: 'كل دين بخطواته', go: 'debts-report' },
     ],
   }];
+  // «النهارده»: everything recorded today, to review line by line.
+  const day = dayReport(book, d, today);
+  if (day.count) {
+    hubs.splice(1, 0, {
+      id: 'today', label: 'النهارده', value: String(day.count), ring: 2, go: 'today',
+      hint: [day.totals.expense ? `مصروف ${money(day.totals.expense)}` : '', day.totals.income ? `دخل ${money(day.totals.income)}` : ''].filter(Boolean).join(' · '),
+    });
+  }
+  // «عدّى الحد»: categories past their monthly limit, until the month ends.
+  const limits = limitsReport(book, d, today.slice(0, 7));
+  if (limits.over.length) {
+    hubs.push({
+      id: 'over', label: 'عدّى الحد', value: String(limits.over.length), ring: 1, alert: true, red: true, go: 'categories',
+      hint: limits.over.length === 1 ? `${limits.over[0].name} ${limits.over[0].percent}%` : limits.over.map((x) => x.name).join('، '),
+    });
+  }
   // These two show only when there is something waiting, and stay until it is handled.
   for (const x of h.daily) {
     hubs.push({
@@ -232,7 +248,7 @@ export function homeScreen(ctx, p, flash) {
       <div class="row small"><span>مصروف الشهر</span><span>${money(h.month.expense)}</span></div>
       <p class="hint">ده مش ربح. اللي بتشيله في الأدراج وسداد الديون وأقساط الجمعيات مش داخلين فيه.</p>
     </details>`;
-  return page({ title: `أهلًا ${d.name}`, sub: 'مزنوق؟ لمّ حساباتك', tab: 'home', body, flash, help: 'home' });
+  return page({ title: `أهلًا ${d.name}`, sub: 'مزنوق؟ لمّ حساباتك', tab: 'home', body, flash, help: 'home', calc: true });
 }
 
 // ---------- More ----------
@@ -247,14 +263,14 @@ export function moreScreen(ctx, p, flash) {
       ${item({ go: 'income', title: 'الدخل ومصادره', right: String(d.sources.length) })}
       ${item({ go: 'transfer', title: 'تحويل وسحب كاش', sub: 'بين الكاش والمحافظ والأدراج، مع الخصم' })}
       ${item({ go: 'count', title: 'عدّ الفلوس', sub: 'عدّ الكاش أو أي درج، والبرنامج يسجّل الفرق' })}
-      ${item({ go: 'budgets', title: 'الميزانية', sub: 'حد شهري لكل وجه صرف' })}
       <div class="sect">السجل والتقارير</div>
       ${item({ go: 'log', title: 'سجل الحركات', sub: 'كل حركة بالتاريخ، مع البحث والعكس' })}
       ${item({ go: 'debts-report', title: 'تقرير الديون', sub: 'كل دين: أصله، اللي اتسدد، المحجوز، والباقي' })}
       ${item({ go: 'borrows', params: { back: 'more' }, title: 'سلف لسه مارجعتش', sub: 'فلوس خدتها من درج وهترجّعها' })}
       <div class="sect">التعديل</div>
       ${item({ go: 'wallets', title: 'الكاش والمحافظ', right: String(d.wallets.length), sub: 'الأسماء، خصم السحب، وإضافة محفظة' })}
-      ${item({ go: 'categories', title: 'أوجه الصرف', right: String(d.categories.length) })}
+      ${item({ go: 'categories', title: 'أوجه الصرف', right: String(d.categories.length), sub: 'الحد الشهري لكل وجه، وكشفه' })}
+      ${item({ go: 'today', title: 'مراجعة النهارده', sub: 'كل اللي اتسجل في يوم، بند بند' })}
       <button class="card item" data-calc=""><span class="row"><b>آلة حاسبة</b>${ICONS.calc}</span></button>
       <div class="sect">البرنامج</div>
       ${item({ go: 'settings', title: 'الإعدادات', sub: 'القفل، الاسم، الشكل، الأمثلة، النسخة الاحتياطية' })}
@@ -288,6 +304,14 @@ export function settingsScreen(ctx, p, flash) {
         <label class="check"><input type="checkbox" data-do="toggle-sound" ${d.settings.sound ? 'checked' : ''} /> تكّة مع كل ضغطة على الدواير والأرقام</label>
       </div>
       <div class="card">
+        <div class="lbl">التنبيه قبل حد الصرف</div>
+        <div class="limit-row">
+          <input id="limit-warn" class="field" inputmode="numeric" value="${d.settings.limitWarn ?? 80}" placeholder="مثلا: 80" />
+          <button class="btn2 mini-btn" data-do="save-limit-warn">احفظ</button>
+        </div>
+        <p class="hint">لما مصروف وجه يوصل النسبة دي من حدّه يجيلك تنبيه أصفر. لو عدّى الحد يبقى أحمر، ومفيش منع.</p>
+      </div>
+      <div class="card">
         <div class="lbl">الأمثلة</div>
         <label class="check"><input type="checkbox" data-do="toggle-examples" ${d.settings.autoExamples ? 'checked' : ''} /> اعرض المثال لوحده أول مرة أفتح أي صفحة</label>
         <button class="linkbtn" data-do="reset-examples">اعرض الأمثلة من الأول تاني</button>
@@ -315,6 +339,7 @@ export function aboutScreen(ctx, p, flash) {
       <div class="card"><div class="lbl">ليه هو مجاني؟</div>
         <p class="hint">مزنوق مجاني للكل. EGYCODE بتبني برامج تساعد الناس تنظّم شغلها وفلوسها.</p></div>
       <div class="card"><div class="lbl">بياناتك فين؟</div>
-        <p class="hint">كل بياناتك محفوظة على جهازك بس. مفيش سيرفر بيستلمها، ومابنبيعش أي بيانات.</p></div>`,
+        <p class="hint">كل بياناتك محفوظة على جهازك بس. مفيش سيرفر بيستلمها، ومابنبيعش أي بيانات.</p></div>
+      <button class="btn2" data-go="intro" data-i="0">شوف التعريف بالبرنامج تاني</button>`,
   });
 }

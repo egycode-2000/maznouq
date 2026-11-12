@@ -579,3 +579,66 @@ html[data-theme="dark"] { --disc: #2E262D; --disc-text: #F4EEF3; --shadow: rgba(
 .circle { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
 .circle .disc { flex: none; }
 .circle .disc.mid { font-size: 19px; }
+
+/* ---------- Limits, statements, «النهارده», intro, calculator on the home ---------- */
+.topbtns { display: flex; gap: 8px; align-items: center; }
+.calc-top {
+  width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(255,255,255,.16); color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.calc-top svg { width: 20px; height: 20px; }
+.calc-after { display: flex; gap: 8px; }
+.calc-after .btn, .calc-after .btn2 { flex: 1; }
+
+/* A limit bar can pass 100%: a mark at the limit, and the extra part in red */
+.bar2 { flex: 1; height: 10px; border-radius: 99px; background: var(--chip); position: relative; overflow: hidden; display: flex; }
+.bar2 i { display: block; height: 100%; background: var(--teal); }
+.bar2 i.warn { background: #E2A100; }
+.bar2 em { display: block; height: 100%; background: var(--danger); }
+.bar2 .lim { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); opacity: .55; }
+.barline.over small { color: var(--danger); }
+.circle small.over { color: var(--danger); font-weight: 800; }
+.circle small.near { color: #B07A00; font-weight: 800; }
+html[data-theme="dark"] .circle small.near { color: #FFD166; }
+.savedbar.warnbar { background: var(--warn-bg); color: var(--warn-text); }
+.limit-row { display: flex; gap: 8px; align-items: center; }
+.limit-row .field { flex: 1; }
+
+/* Day and month switcher, sections and entry cards */
+.daybar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.daybar button {
+  border: 0; background: var(--card); border-radius: 99px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--plum-text); box-shadow: 0 2px 6px rgba(60,30,55,.12); cursor: pointer; white-space: nowrap;
+}
+.daybar button.off { opacity: .35; cursor: default; }
+.daybar b { font-size: 14.5px; text-align: center; }
+.secthead { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.secthead b { font-size: 15px; color: var(--plum-text); }
+.secthead span { font-size: 13px; color: var(--muted); }
+.entry { gap: 4px; }
+.entry b.in, b.in { color: var(--teal); }
+.entry .acts { display: flex; justify-content: space-between; border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 2px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 6px; }
+
+/* The six-month chart of one category */
+.chart { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; height: 120px; padding: 6px 4px 0; position: relative; }
+.chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.chart .col i { width: 100%; border-radius: 8px 8px 3px 3px; background: var(--r4); opacity: .55; }
+.chart .col i.now { background: var(--coral); opacity: 1; }
+.chart .col i.over { background: var(--danger); opacity: .85; }
+.chart .col small { font-size: 11px; color: var(--muted); }
+.chart .col b { font-size: 10.5px; }
+.chart .limline { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--danger); opacity: .6; }
+
+/* Intro before the first setup */
+.intro { min-height: 100vh; min-height: 100dvh; width: 100%; display: flex; flex-direction: column; background: var(--bg); }
+.intro .skip { align-self: flex-start; margin: 16px; border: 0; background: none; font: inherit; color: var(--muted); font-weight: 700; cursor: pointer; }
+.intro .art { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 12px; }
+.intro .circle .disc.big { width: 92px; height: 92px; font-size: 17px; }
+.intro .txt { padding: 0 28px; text-align: center; }
+.intro h2 { margin: 0 0 8px; font-size: 24px; color: var(--plum-text); }
+.intro p { margin: 0; font-size: 16px; line-height: 1.8; color: var(--text); }
+.intro .dots { display: flex; justify-content: center; gap: 8px; margin: 22px 0; }
+.intro .dots i { width: 9px; height: 9px; border-radius: 99px; background: var(--line); }
+.intro .dots i.on { width: 26px; background: var(--coral); }
+.intro .go { margin: 0 24px 28px; width: auto; }

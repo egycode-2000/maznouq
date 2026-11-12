@@ -20,7 +20,7 @@ async function commit() {
   return change((st) => {
     const done = COMMIT[f.kind](st, f, today());
     if (done.entryId) withPhoto(st, done.entryId);
-    session.saved = { text: done.text, entryId: done.entryId, undoIds: done.undoIds };
+    session.saved = { text: done.text, warn: done.warn ?? '', entryId: done.entryId, undoIds: done.undoIds };
   }, f.back ?? 'home', f.backParams ?? {}, '');
 }
 
