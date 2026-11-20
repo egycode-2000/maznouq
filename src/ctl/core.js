@@ -1,6 +1,6 @@
 // The app's running state, the router, and helpers every action uses.
 // Actions change the ledger through change(), which saves and then opens the next screen.
-import { SCREENS, setupScreen, lockScreen } from '../views.js';
+import { SCREENS, lockScreen } from '../views.js';
 import { introScreen } from '../ui/intro.js';
 import { photoKey, markPhoto } from '../photos.js';
 import { loadState, persist, todayIso, nowStamp } from '../state.js';
@@ -13,24 +13,21 @@ import { placeList } from '../places.js';
 import { EXAMPLES } from '../ui/examples.js';
 import { esc } from '../ui/common.js';
 import { FLOW_ROUTES, newFlow } from '../flow.js';
+import { newOnboard } from '../onboard.js';
+import { onboardScreen } from '../ui/onboard.js';
 
 export const root = document.getElementById('app');
-const DEFAULT_CATEGORIES = ['أكل', 'مواصلات', 'موبايل ونت', 'ترفيه', 'ملابس', 'صحة', 'تعليم', 'صدقات'];
 
+// The answers of the first setup, question by question (see src/onboard.js).
 export function freshDraft() {
-  return {
-    name: '',
-    wallets: [{ id: 'w-cash', name: 'الكاش', opening: '' }],
-    sources: [{ id: 's-1', name: 'شغل أو دروس', kind: 'monthly' }],
-    categories: DEFAULT_CATEGORIES.map((name, i) => ({ id: `c-${i + 1}`, name, on: i < 3 || name === 'صدقات' })),
-  };
+  return newOnboard();
 }
 
 // Everything that lives between screens: where you are, the message to show, and unfinished forms.
 export const session = {
   route: { name: 'home', p: {} },
   flash: '',
-  setupStep: 0,
+  obStep: 'name',
   draft: freshDraft(),
   jamDraft: {},
   ctx: null,
@@ -50,6 +47,8 @@ export const session = {
   // The intro screens before the first setup: which one is showing, and whether they were passed.
   intro: 0,
   introDone: false,
+  // Whether the browser agreed to keep the data when space runs low (null: cannot tell).
+  persisted: null,
 };
 
 export { nowStamp };
@@ -98,7 +97,7 @@ export async function render() {
     root.innerHTML = introScreen(session.intro);
   } else if (!state) {
     session.ctx = null;
-    root.innerHTML = setupScreen(session.draft, session.setupStep, flash);
+    root.innerHTML = onboardScreen(session.draft, session.obStep, flash);
   } else if (session.lock && !session.unlocked) {
     session.ctx = null;
     document.documentElement.dataset.theme = state.d.settings.theme;
@@ -110,7 +109,7 @@ export async function render() {
     const view = viewData(d, book);
     const ctx = {
       d: view.d, archived: view.archived, book, today: today(), month: today().slice(0, 7),
-      places: placeList(view.d, book), jamDraft: session.jamDraft, flow: session.flow,
+      places: placeList(view.d, book), jamDraft: session.jamDraft, flow: session.flow, persisted: session.persisted,
     };
     session.ctx = ctx;
     if (session.route.name === 'flow' && !session.flow) session.route = { name: 'home', p: {} };

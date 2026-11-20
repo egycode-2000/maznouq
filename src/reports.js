@@ -1,7 +1,7 @@
 // Every number the screens show is computed here (or in places.js / people.js), never inside a screen.
 // One function per number, so the home screen, the lists, the statements, the reports and the
 // WhatsApp messages always agree.
-import { balanceOf, periodTotals } from './ledger.js';
+import { balanceOf, periodTotals, isReversed, countsIn } from './ledger.js';
 import { dueItems } from './bills.js';
 import { remainingOf, scheduleStatus } from './debts.js';
 import { addMonths, dueDateOf } from './obligations.js';
@@ -22,8 +22,8 @@ export function monthTotals(book, month) {
 // Net flow on one account during a month: spending on a category, or income from a source.
 function flow(book, accountId, month, sign) {
   let total = 0;
-  for (const e of book.entries) {
-    if (e.date < monthStart(month) || e.date > monthEnd(month)) continue;
+  for (const [index, e] of book.entries.entries()) {
+    if (!countsIn(book, e, index, monthStart(month), monthEnd(month))) continue;
     for (const l of e.lines) if (l.account === accountId) total += sign * (l.debit - l.credit);
   }
   return total;
@@ -223,7 +223,7 @@ export function limitsReport(book, d, month) {
 // An undo of an older move shows as its own line («اتلغت حركة يوم ...»). So the lines always add up to
 // exactly the totals above (spentIn, periodTotals): the same source, nothing re-computed differently.
 function inPeriod(book, from, to) {
-  const list = book.entries.filter((e) => e.date >= from && e.date <= to);
+  const list = book.entries.filter((e, index) => countsIn(book, e, index, from, to));
   const ids = new Set(list.map((e) => e.id));
   const gone = new Set();
   for (const e of list) {
@@ -321,4 +321,64 @@ export function categoryStatementText(book, d, categoryId, month) {
     `الإجمالي: ${formatMoney(st.total)}`,
     lim.limit ? `الحد: ${formatMoney(lim.limit)} (${lim.percent}%)` : '',
   ].filter(Boolean).join('\n');
+}
+
+// ---------- ملخص الشهر ----------
+// Read only: built from monthTotals, spentIn and limitStatus, so it always matches «أوجه الصرف», the statement
+// and the home. Every expense account counts (categories, bills, fees...), so the parts add up to the month total.
+export function monthSummary(book, d, month) {
+  const prevMonth = addMonths(month, -1);
+  const totals = monthTotals(book, month);
+  const prev = monthTotals(book, prevMonth);
+  const all = [...book.accounts.values()]
+    .filter((a) => a.type === 'expense')
+    .map((a) => ({
+      id: a.id, name: a.name, spent: spentIn(book, a.id, month), prevSpent: spentIn(book, a.id, prevMonth),
+      limit: limitStatus(book, d, a.id, month),
+    }))
+    .filter((x) => x.spent !== 0 || x.prevSpent !== 0);
+  const ranked = all.filter((x) => x.spent > 0).sort((a, b) => b.spent - a.spent);
+  const top = ranked.slice(0, 5);
+  return {
+    month, prevMonth, totals, prev, top,
+    // Everything not in the top five (an undone expense from last month counts here as a minus),
+    // so the top five plus «باقي الأبواب» is exactly the month's expense.
+    others: all.filter((x) => !top.includes(x)).reduce((sum, x) => sum + x.spent, 0),
+    all,
+    over: all.filter((x) => x.limit.level === 'over'),
+  };
+}
+
+// ---------- مصروف بيتكرر ----------
+// Expenses repeated with the same amount, place and category (cash or a wallet) in the last 60 days,
+// most repeated first: shown as one-tap buttons on «صرفت كام؟».
+export function frequentExpenses(book, d, today, max = 4) {
+  const from = addDaysIso(today, -60);
+  const places = new Map(d.wallets.map((w) => [w.id, w.name]));
+  const cats = new Map(d.categories.map((c) => [c.id, c.name]));
+  const groups = new Map();
+  for (const e of book.entries) {
+    if (!e.id.startsWith('exp-') || e.date < from || isReversed(book, e.id)) continue;
+    const debit = e.lines.find((l) => l.debit > 0);
+    const credit = e.lines.find((l) => l.credit > 0);
+    if (!debit || !credit || !places.has(credit.account) || !cats.has(debit.account)) continue;
+    const key = `${debit.debit}|${credit.account}|${debit.account}`;
+    const g = groups.get(key) ?? {
+      amount: debit.debit, placeId: credit.account, placeName: places.get(credit.account),
+      categoryId: debit.account, categoryName: cats.get(debit.account), count: 0, last: '',
+    };
+    g.count += 1;
+    if (e.date >= g.last) g.last = e.date;
+    groups.set(key, g);
+  }
+  return [...groups.values()]
+    .filter((g) => g.count >= 2)
+    .sort((a, b) => b.count - a.count || b.last.localeCompare(a.last))
+    .slice(0, max);
+}
+
+function addDaysIso(iso, days) {
+  const [y, m, dd] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, dd + days));
+  return dt.toISOString().slice(0, 10);
 }

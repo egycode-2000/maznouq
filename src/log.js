@@ -2,7 +2,7 @@
 // An entry can be undone (عكس) from here when nothing else depends on it.
 // Payments that change a status (a bill month, a jam'iya month, a payout) are undone from their own screen,
 // so their status goes back to «لسه» together with the money.
-import { isReversed } from './ledger.js';
+import { isReversed, isOldPeriod } from './ledger.js';
 
 // Entry id prefixes written by the app, and whether the log may undo them.
 const UNDO_HERE = ['exp-', 'inc-', 'tr-', 'sp-', 'gd-', 'gw-', 'dp-', 'rs-', 'dl-', 'pe-', 'put-', 'dy-', 'cover-', 'cnt-', 'ub-', 'us-'];
@@ -11,6 +11,7 @@ const OWN_SCREEN = {
 };
 
 export function undoRule(book, entry) {
+  if (isOldPeriod(book, entry)) return { can: false, why: 'من الفترة القديمة (قبل البداية الجديدة)' };
   if (entry.reversalOf) return { can: false, why: 'دي حركة عكس' };
   if (isReversed(book, entry.id)) return { can: false, why: 'اتعكست' };
   if (UNDO_HERE.some((p) => entry.id.startsWith(p))) return { can: true, why: '' };
@@ -45,6 +46,7 @@ export function logRows(book, { search = '', month = '', edits = {} } = {}) {
       undo: undoRule(book, e),
       edit: canEdit(e) && undoRule(book, e).can,
       editedFrom: edits[e.id]?.prevAmount ?? null,
+      old: isOldPeriod(book, e),
       reversal: Boolean(e.reversalOf),
     }))
     .filter((r) => !words || [r.memo, r.note, ...r.to, ...r.from, String(r.amount / 100)].join(' ').toLowerCase().includes(words))

@@ -74,7 +74,10 @@ export async function loadState() {
   const saved = await loadValue(SETUP_KEY);
   if (!saved) return null;
   const d = withDefaults(saved);
-  return { d, book: restoreBook(d.book) };
+  const book = restoreBook(d.book);
+  // Where «بداية جديدة» started, if one was made (see restart.js and ledger.countsIn).
+  if (d.period) book.period = d.period;
+  return { d, book };
 }
 
 export async function persist(state) {

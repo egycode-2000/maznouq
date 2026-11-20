@@ -73,3 +73,15 @@ export async function clearAll() {
     return { value: true };
   });
 }
+
+// Asks the browser to keep this app's data even when the phone runs low on space.
+// true: protected. false: the browser said no (yet). null: this browser cannot do it.
+export async function protectStorage() {
+  try {
+    if (!navigator.storage?.persist) return null;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return null;
+  }
+}

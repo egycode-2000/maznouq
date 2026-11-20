@@ -1,7 +1,7 @@
 // Reviewing what was recorded: «مراجعة النهارده» (one day, line by line) and the statement of one spending
 // category (كشف وجه الصرف). Every number comes from reports.js (dayReport, categoryStatement, limitStatus).
-import { esc, money, limitBar, page, photoBtn } from './common.js';
-import { dayReport, categoryStatement, categoryMonths, categoryStatementText } from '../reports.js';
+import { esc, money, egpValue, limitBar, page, photoBtn } from './common.js';
+import { dayReport, categoryStatement, categoryMonths, categoryStatementText, monthSummary } from '../reports.js';
 import { showDate, showMonth, formatMoney } from '../format.js';
 import { addMonths } from '../obligations.js';
 import { addDays } from '../daily.js';
@@ -99,5 +99,83 @@ export function categoryScreen(ctx, p, flash) {
       <div class="secthead"><b>الحركات (${st.rows.length})</b><span>الأحدث فوق</span></div>
       ${st.rows.map((r) => entryCard(ctx, { ...r, title: showDate(r.date) }, { showDay: false })).join('') || '<p class="hint">مفيش مصروف على الوجه ده في الشهر ده.</p>'}
       ${st.rows.length ? `<a class="btn2" href="${esc(whatsappLink('', categoryStatementText(book, d, cat.id, month)))}" target="_blank" rel="noopener">ابعت الكشف على الواتساب</a>` : ''}`,
+  });
+}
+
+// ملخص الشهر: income, spending, the top five, limits passed, against last month. Numbers from monthSummary.
+export function monthScreen(ctx, p, flash) {
+  const { d, book } = ctx;
+  const month = p.m || ctx.month;
+  const s = monthSummary(book, d, month);
+  const surplus = s.totals.income - s.totals.expense;
+  const versus = (now, before) => {
+    if (!before && !now) return '';
+    const diff = now - before;
+    if (diff === 0) return 'زي الشهر اللي فات';
+    return `${diff > 0 ? 'أكتر' : 'أقل'} من الشهر اللي فات بـ ${money(Math.abs(diff))}`;
+  };
+  const max = Math.max(1, ...s.top.map((x) => x.spent));
+  const isCategory = (id) => d.categories.some((c) => c.id === id);
+  return page({
+    title: `ملخص ${showMonth(month)}`, sub: 'دخلك ومصروفك وأكتر حاجات صرفت فيها', back: 'home', tab: 'home', flash, help: 'month',
+    body: `
+      <div class="daybar">
+        <button data-go="month" data-m="${addMonths(month, -1)}">‹ ${showMonth(addMonths(month, -1)).split(' ')[0]}</button>
+        <b>${showMonth(month)}</b>
+        <button data-go="month" data-m="${addMonths(month, 1)}" ${month >= ctx.month ? 'class="off" disabled' : ''}>${showMonth(addMonths(month, 1)).split(' ')[0]} ›</button>
+      </div>
+      <div class="card">
+        <div class="row"><span><i class="dot" style="background:var(--teal)"></i>الدخل</span><b class="in">${money(s.totals.income)}</b></div>
+        <span class="hint">${versus(s.totals.income, s.prev.income)}</span>
+        <div class="row"><span><i class="dot" style="background:var(--danger)"></i>المصروف</span><b class="neg">${money(s.totals.expense)}</b></div>
+        <span class="hint">${versus(s.totals.expense, s.prev.expense)}</span>
+        <div class="row total"><span>${surplus < 0 ? 'العجز' : 'الفايض'}</span><b class="${surplus < 0 ? 'neg' : 'in'}">${money(Math.abs(surplus))}</b></div>
+        <p class="hint">ده مش ربح. اللي بتشيله في الأدراج وسداد الديون وأقساط الجمعيات مش داخلين فيه.</p>
+      </div>
+      ${s.top.length ? `
+      <div class="secthead"><b>أكتر حاجات صرفت فيها</b><span>من ${money(s.totals.expense)}</span></div>
+      <div class="card">
+        ${s.top.map((x) => `
+          <${isCategory(x.id) ? `button class="topcat link" data-go="category" data-id="${esc(x.id)}" data-m="${month}"` : 'div class="topcat"'}>
+            <div class="row"><b>${esc(x.name)}</b><b>${money(x.spent)}</b></div>
+            <div class="hbar"><i class="${x.limit.level === 'over' ? 'over' : ''}" style="width:${Math.round((x.spent * 100) / max)}%"></i></div>
+            <div class="row small"><span>${s.totals.expense > 0 ? `${Math.round((x.spent * 100) / s.totals.expense)}% من مصروفك` : ''}${x.limit.limit ? ` · ${x.limit.percent}% من حدّه` : ''}</span><span>الشهر اللي فات ${money(x.prevSpent)}</span></div>
+          </${isCategory(x.id) ? 'button' : 'div'}>`).join('')}
+        ${s.others ? `<div class="row small"><span>باقي الأبواب</span><span>${money(s.others)}</span></div>` : ''}
+      </div>` : '<p class="hint">مفيش مصروف في الشهر ده.</p>'}
+      ${s.over.length ? `
+      <div class="card warn-card">
+        <b>عدّوا الحد</b>
+        ${s.over.map((x) => `<div class="row small"><span>${esc(x.name)}</span><span>${x.limit.percent}% · زيادة ${money(x.limit.over)}</span></div>`).join('')}
+        <span class="hint">خلي بالك منهم الشهر الجاي.</span>
+      </div>` : ''}`,
+  });
+}
+
+// «ابدأ من الأول»: a new start keeping the names, or wiping everything. Both download a backup first.
+export function restartScreen(ctx, p, flash) {
+  const { places, d } = ctx;
+  const list = places.filter((x) => ['cash', 'wallet', 'drawer'].includes(x.kind));
+  return page({
+    title: 'ابدأ من الأول', sub: 'اختار واحدة من الاتنين', back: 'settings', tab: 'more', flash, help: 'restart',
+    body: `
+      <div class="card">
+        <div class="lbl">١. بداية جديدة بنفس الأسماء</div>
+        <p class="hint">الأماكن والأبواب والخزن والناس بيفضلوا. اكتب اللي في كل مكان فعلا دلوقتي، والبرنامج يبدأ منه.
+        الحركات القديمة ماتتمسحش: تفضل في السجل «فترة قديمة» تتفرج عليها بس، والشهر ده يتحسب من البداية الجديدة.</p>
+        ${list.map((x) => `
+          <div class="line-row">
+            <span class="split-name"><b>${esc(x.name)}</b><small>${x.safeName ? `${esc(x.safeName)} · ` : ''}في البرنامج ${money(x.balance)}</small></span>
+            <input class="field split-val" data-restart="${esc(x.id)}" inputmode="decimal" value="${egpValue(Math.max(0, x.balance))}" />
+          </div>`).join('')}
+        <p class="hint">الناس والديون والجمعيات بيفضلوا زي ما هم، ودروج الدهب والوحدات بكمياتها.${d.borrows.some((b) => b.amount > b.repaid) ? ' وسلف الأدراج المفتوحة بتتقفل.' : ''}</p>
+        <button class="btn" data-do="new-start">نزّل نسخة احتياطية وابدأ من جديد</button>
+      </div>
+      <div class="card danger-card">
+        <div class="lbl">٢. امسح كل حاجة</div>
+        <p class="hint">بيمسح البرنامج كله من الجهاز ده، كأنك منزّله جديد، وبيرجعك للتعريف والإعداد. مفيش رجوع غير من النسخة الاحتياطية اللي هتتنزّل الأول.</p>
+        <input id="wipe-all-confirm" class="field" placeholder="اكتب كلمة «امسح» للتأكيد" />
+        <button class="btn2 danger" data-do="wipe-all">نزّل نسخة احتياطية وامسح كل حاجة</button>
+      </div>`,
   });
 }

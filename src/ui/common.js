@@ -57,6 +57,8 @@ export const ICONS = {
   plus: icon('M12 5v14M5 12h14', 2.6),
   calc: icon('M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01'),
   help: icon('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01'),
+  eye: icon('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'),
+  eyeOff: icon('M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.3-1M9.9 9.9a3 3 0 0 0 4.2 4.2'),
 };
 
 // Opens the calculator and sends its result to the field with this id.
@@ -185,7 +187,7 @@ function nav(tab) {
 }
 
 // Every screen: header (back + title + «مثال»), the body, the brand footer and the bottom bar.
-export function page({ title, sub = '', back = null, backParams = {}, tab = '', body, flash = '', help = '', calc = false }) {
+export function page({ title, sub = '', back = null, backParams = {}, tab = '', body, flash = '', help = '', calc = false, tools = '' }) {
   const data = Object.entries(backParams).map(([k, val]) => `data-${k}="${esc(val)}"`).join(' ');
   return `
     <section class="phone">
@@ -193,6 +195,7 @@ export function page({ title, sub = '', back = null, backParams = {}, tab = '', 
         <div class="toprow">
           ${back ? `<button class="backbtn" data-go="${back}" ${data}>${ICONS.back}<span>رجوع</span></button>` : '<span></span>'}
           <span class="topbtns">
+            ${tools}
             ${calc ? `<button type="button" class="calc-top" data-calc="" aria-label="آلة حاسبة">${ICONS.calc}</button>` : ''}
             ${help ? `<button class="helpbtn" data-help="${help}">${ICONS.help}<span>مثال</span></button>` : ''}
           </span>

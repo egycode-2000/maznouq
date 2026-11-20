@@ -1,81 +1,21 @@
-// First-run setup, the home screen, «المزيد», settings and «عن مزنوق».
-import { esc, money, item, page, note, footer, ICONS } from './common.js';
+// The home screen, «المزيد», settings and «عن مزنوق». (The first setup is in ui/onboard.js.)
+import { esc, money, item, page, ICONS } from './common.js';
 import { homeSummary, dayReport, limitsReport } from '../reports.js';
+import { peopleList, wording } from '../people.js';
 import { backupDue } from '../state.js';
 import { lockSettings } from './lock.js';
 import { cashOf } from '../places.js';
 import { showDate } from '../format.js';
 import { showQty } from '../units.js';
+import { APP_URL } from '../presets.js';
+import qrcode from '../vendor/qrcode.js';
 
-// ---------- Setup (first run) ----------
-export const STEPS = ['الاسم', 'الكاش والمحافظ', 'مصادر الدخل', 'أوجه الصرف'];
-
-export function setupScreen(draft, step, flash = '') {
-  const dots = STEPS.map((_, i) => `<span class="${i <= step ? 'on' : ''}"></span>`).join('');
-  let body = '';
-  if (step === 0) {
-    body = `
-      <label class="lbl">إزاي أناديك؟</label>
-      <input id="name" class="field" value="${esc(draft.name)}" placeholder="اكتب اسمك أو لقبك" data-autofocus />
-      <p class="hint">الاسم بيظهر في الترحيب بس.</p>
-      <details class="card">
-        <summary>عندك نسخة احتياطية؟ رجّعها بدل الإعداد</summary>
-        <input class="field file" type="file" accept="application/json,.json" data-change="import-setup" />
-        <p class="hint">لو كان عليها رقم سري، هتعمل رقم جديد من الإعدادات.</p>
-      </details>`;
-  } else if (step === 1) {
-    body = `
-      <p class="hint">اكتب اللي معاك دلوقتي. ده هيبقى بداية الحساب، وتقدر تعدّله بعدين.</p>
-      ${draft.wallets.map((w, i) => (i === 0 ? `
-        <div class="card">
-          <div class="lbl">الكاش اللي معاك دلوقتي</div>
-          <input class="field" data-w-open="0" inputmode="decimal" value="${esc(w.opening)}" placeholder="المبلغ بالجنيه" data-autofocus />
-        </div>` : `
-        <div class="card">
-          <input class="field" data-w-name="${i}" value="${esc(w.name)}" placeholder="اسم المحفظة (مثلا: فودافون كاش)" />
-          <input class="field" data-w-open="${i}" inputmode="decimal" value="${esc(w.opening)}" placeholder="الرصيد بالجنيه" />
-        </div>`)).join('')}
-      <button class="btn2" data-do="setup-add-wallet">+ محفظة (فودافون كاش، إنستاباي، بنك)</button>
-      <p class="hint">الخزن والأدراج والجمعيات والديون بتتضاف بعد الإعداد.</p>`;
-  } else if (step === 2) {
-    body = `
-      <p class="hint">من فين بتدخلك فلوس؟ كل مصدر شهري أو مفتوح.</p>
-      ${draft.sources.map((s, i) => `
-        <div class="card">
-          <input class="field" data-s-name="${i}" value="${esc(s.name)}" placeholder="اسم المصدر" />
-          <div class="seg">
-            <button data-do="setup-kind" data-idx="${i}" data-kind="monthly" class="${s.kind === 'monthly' ? 'on' : ''}">شهري</button>
-            <button data-do="setup-kind" data-idx="${i}" data-kind="open" class="${s.kind === 'open' ? 'on' : ''}">مفتوح</button>
-          </div>
-        </div>`).join('')}
-      <button class="btn2" data-do="setup-add-source">+ مصدر تاني</button>`;
-  } else {
-    body = `
-      <p class="hint">بتصرف على إيه؟ اختار اللي يهمك، وتقدر تضيف بعدين.</p>
-      <div class="chips">
-        ${draft.categories.map((c, i) => `
-          <button class="chip ${c.on ? 'on' : ''}" data-do="setup-cat" data-idx="${i}">${esc(c.name)}</button>`).join('')}
-      </div>`;
-  }
-  const last = step === STEPS.length - 1;
-  return `
-    <section class="phone">
-      <header class="top">
-        <div class="toprow">
-          ${step > 0 ? `<button class="backbtn" data-do="setup-back">${ICONS.back}<span>رجوع</span></button>` : '<span></span>'}
-        </div>
-        <h1>أهلًا بيك في مزنوق</h1>
-        <p>${esc(STEPS[step])}</p>
-        <div class="steps">${dots}</div>
-      </header>
-      <div class="body">
-        ${note(flash)}
-        ${body}
-        <div class="spacer"></div>
-        <button class="btn" data-do="setup-next">${last ? 'خلّصنا، ابدأ' : 'كمّل'}</button>
-      </div>
-      ${footer()}
-    </section>`;
+// A QR code drawn as SVG on the device (works offline).
+function qrSvg(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
 }
 
 // ---------- Home ----------
@@ -84,7 +24,7 @@ export function setupScreen(draft, step, flash = '') {
 const RING = ['#2F8F86', '#C2185B', '#FB6C00', '#9DAA00', '#714B67'];
 
 function hubStage(hub, open) {
-  const branches = open ? hub.branches : [];
+  const branches = [];
   const n = branches.length;
   const R = 165;
   const spread = n > 1 ? Math.min(144, 36 * (n - 1) + 36) : 0;
@@ -117,10 +57,10 @@ function hubStage(hub, open) {
     ? `data-go="${hub.go}" ${Object.entries(hub.params ?? {}).map(([k, val]) => `data-${k}="${esc(val)}"`).join(' ')}`
     : `data-go="home" data-hub="${hub.id}" data-open="${open ? '' : '1'}"`;
   html += `
-    <button type="button" class="hub-big ${n ? 'pressed' : ''} ${hub.neg ? 'neg' : ''}" style="left:${cx}px;top:${cy}px;width:${dia}px;height:${dia}px" ${tap}>
+    <button type="button" class="hub-big ${open ? 'pressed' : ''} ${hub.neg ? 'neg' : ''}" style="left:${cx}px;top:${cy}px;width:${dia}px;height:${dia}px" ${tap}>
       <span class="l">${esc(hub.label)}</span>
       <span class="v" style="font-size:${n ? 22 : 28}px">${esc(hub.value)}</span>
-      <span class="h">${esc(hub.go ? 'اضغط تفتح' : (n ? 'اضغط تاني يقفل' : `${hub.id === 'pocket' ? 'الفلوس اللي معاك · ' : ''}اضغط · ${hub.branches.length} اختيارات`))}</span>
+      <span class="h">${esc(hub.go ? 'اضغط تفتح' : (open ? 'اضغط تاني يقفل' : `${hub.id === 'pocket' ? 'الفلوس اللي معاك · ' : ''}اضغط تشوف اللي جواها`))}</span>
     </button>`;
   return `<div class="hubwrap"><div class="hubstage" style="height:${height}px"><svg width="390" height="${height}" aria-hidden="true">${svg}</svg>${html}</div></div>`;
 }
@@ -137,14 +77,43 @@ function hubMini(hub, i) {
     </button>`;
 }
 
+// What a hub holds, in numbers, and what you can do from it: the card that opens under the big circle.
+function hubCard(hub, m) {
+  const rows = hub.rows.map((r) => (r.go
+    ? `<button class="row link ${r.sub ? 'small sub' : ''}" data-go="${r.go}" ${Object.entries(r.params ?? {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}><span>${esc(r.label)}</span><b class="${r.cls ?? ''}">${esc(r.value)}</b></button>`
+    : `<div class="row ${r.sub ? 'small sub' : ''} ${r.total ? 'total' : ''}"><span>${esc(r.label)}</span><b class="${r.cls ?? ''}">${esc(r.value)}</b></div>`)).join('');
+  const actions = hub.branches.map((b) => `
+    <button type="button" class="hub-act" data-go="${b.go}" ${Object.entries(b.params ?? {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>
+      <i>${esc(b.icon)}</i><span><b>${esc(b.title)}</b><small>${esc(b.sub ?? '')}</small></span>
+    </button>`).join('');
+  return `
+    <div class="card hub-card">
+      <div class="lbl">جوه «${esc(hub.label)}»</div>
+      ${rows || `<p class="hint">${esc(hub.empty ?? 'لسه مفيش حاجة هنا.')}</p>`}
+      ${hub.note ? `<p class="hint">${esc(hub.note)}</p>` : ''}
+      <div class="hub-acts">${actions}</div>
+    </div>`;
+}
+
 export function homeScreen(ctx, p, flash) {
   const { d, book, today } = ctx;
   const h = homeSummary(book, d, today);
   const pic = h.picture;
   const cashId = cashOf(d)?.id ?? '';
+  // «إخفاء الأرقام»: the home shows ••• instead of amounts, for when someone sees your phone.
+  const hide = Boolean(d.settings.hideAmounts);
+  const m = hide ? () => '•••' : money;
+  const day = dayReport(book, d, today);
+  const neg = (x) => (x < 0 ? 'neg' : '');
 
   const hubs = [{
-    id: 'pocket', label: 'الكاش', value: money(pic.cash), neg: pic.cash < 0, ring: 2, hint: 'الفلوس اللي معاك',
+    id: 'pocket', label: 'الكاش', value: m(pic.cash), neg: pic.cash < 0, ring: 2, hint: 'الفلوس اللي معاك',
+    rows: [
+      { label: 'اللي معاك دلوقتي', value: m(pic.cash), cls: neg(pic.cash) },
+      { label: 'دخلك النهارده', value: m(day.totals.income), sub: true },
+      { label: 'مصروفك النهارده', value: m(day.totals.expense), sub: true },
+      ...(day.count ? [{ label: `راجع اللي اتسجل النهارده (${day.count})`, value: '←', go: 'today' }] : []),
+    ],
     branches: [
       { icon: '−', title: 'مصروف', sub: 'سجّل اللي صرفته', go: 'expense' },
       { icon: '+', title: 'دخل', sub: 'فلوس دخلتلك', go: 'income-new' },
@@ -153,35 +122,59 @@ export function homeScreen(ctx, p, flash) {
       { icon: '#', title: 'عدّ الكاش', sub: 'طابق اللي معاك', go: 'count', params: { place: cashId } },
     ],
   }, {
-    id: 'total', label: 'إجمالي فلوسك', value: money(pic.total), neg: pic.total < 0, ring: 0, hint: 'كاش ومحافظ وخزن',
+    id: 'total', label: 'إجمالي فلوسك', value: m(pic.total), neg: pic.total < 0, ring: 0, hint: 'كاش ومحافظ وخزن',
+    rows: [
+      { label: 'الكاش', value: m(pic.cash), cls: neg(pic.cash) },
+      ...pic.wallets.map((w) => ({ label: w.name, value: m(w.balance), cls: neg(w.balance) })),
+      ...pic.safes.flatMap((sf) => [
+        { label: sf.name, value: m(sf.total), go: 'safe', params: { id: sf.id } },
+        ...sf.drawers.filter((g) => !g.units).map((g) => ({ label: g.name, value: m(g.balance), sub: true })),
+      ]),
+      { label: 'الإجمالي', value: m(pic.total), total: true, cls: neg(pic.total) },
+      ...pic.units.filter((u) => u.qty > 0).map((u) => ({ label: `${u.name}: ${showQty(u.qty)} ${u.unit}`, value: `اتدفع فيهم ${m(u.cost)}`, sub: true })),
+    ],
+    note: 'الفلوس بتفضل محسوبة طول ما هي في أي مكان من دول، لحد ما تسجّل إنها اتصرفت. الدهب والوحدات مش داخلين في الإجمالي.',
     branches: [
-      { icon: 'ك', title: 'الكاش', sub: money(pic.cash), go: 'wallets' },
-      ...(pic.wallets.length ? [{ icon: 'م', title: 'المحافظ', sub: money(pic.walletsTotal), go: 'wallets' }] : []),
-      { icon: 'خ', title: 'الخزن', sub: money(pic.safesTotal), go: 'safes', params: { back: 'home' } },
+      { icon: 'ك', title: 'الكاش والمحافظ', sub: 'تعديل وسحب كاش', go: 'wallets' },
+      { icon: 'خ', title: 'الخزن والأدراج', sub: 'حط واسحب', go: 'safes', params: { back: 'home' } },
     ],
   }, {
-    id: 'dues', label: 'عليك الشهر ده', value: money(h.remaining.total), ring: 1, hint: `يفضل بعدها ${money(h.afterDues)}`,
+    id: 'dues', label: 'عليك الشهر ده', value: m(h.remaining.total), ring: 1, hint: `يفضل بعدها ${m(h.afterDues)}`,
+    rows: [
+      ...(h.remaining.bills ? [{ label: 'فواتير والتزامات', value: m(h.remaining.bills) }] : []),
+      ...(h.remaining.jamiya ? [{ label: 'أقساط جمعيات', value: m(h.remaining.jamiya) }] : []),
+      ...(h.remaining.debtsOut ? [{ label: 'أقساط ديون', value: m(h.remaining.debtsOut) }] : []),
+      ...h.soon.map((x) => ({ label: `${x.label} · ${showDate(x.date)}${x.overdue ? ' · متأخر' : ''}`, value: m(x.amount), sub: true, go: x.go, params: x.params, cls: x.overdue ? 'neg' : '' })),
+      { label: 'يفضل معاك بعد ما تدفعهم', value: m(h.afterDues), total: true, cls: neg(h.afterDues) },
+    ],
+    empty: 'مفيش حاجة عليك الشهر ده.',
     branches: [
-      { icon: '☰', title: 'الالتزامات', sub: `يفضل بعدها ${money(h.afterDues)}`, go: 'dues' },
+      { icon: '☰', title: 'الالتزامات', sub: 'كل حاجة بمعادها', go: 'dues' },
       { icon: '+', title: 'التزام جديد', sub: 'فاتورة أو إيجار', go: 'bill-new' },
       { icon: 'ج', title: 'جمعية جديدة', sub: 'بالأسئلة', go: 'jam-new' },
     ],
   }, {
-    id: 'people', label: 'الحسابات', value: money(h.people.owedToMe - h.people.iOwe), neg: h.people.owedToMe < h.people.iOwe, ring: 4,
+    id: 'people', label: 'الحسابات', value: m(h.people.owedToMe - h.people.iOwe), neg: h.people.owedToMe < h.people.iOwe, ring: 4,
     hint: 'ليك وعليك عند الناس',
+    rows: [
+      { label: 'ليك عند الناس', value: m(h.people.owedToMe) },
+      { label: 'عليك للناس', value: m(h.people.iOwe) },
+      ...peopleList(book, d).filter((x) => x.balance !== 0).slice(0, 5).map((x) => ({
+        label: x.name, value: hide ? '•••' : wording(x.balance), sub: true,
+        go: { running: 'person', debt: 'debt', jamiya: 'jam' }[x.kind], params: { id: x.id },
+      })),
+    ],
     branches: [
-      { icon: '↓', title: 'ليك عند الناس', sub: money(h.people.owedToMe), go: 'accounts' },
-      { icon: '↑', title: 'عليك للناس', sub: money(h.people.iOwe), go: 'accounts' },
+      { icon: '☰', title: 'كل الحسابات', sub: 'الناس والديون', go: 'accounts' },
       { icon: '+', title: 'حساب جديد', sub: 'شخص رايح جاي', go: 'person-new' },
       { icon: '≡', title: 'تقرير الديون', sub: 'كل دين بخطواته', go: 'debts-report' },
     ],
   }];
   // «النهارده»: everything recorded today, to review line by line.
-  const day = dayReport(book, d, today);
   if (day.count) {
     hubs.splice(1, 0, {
       id: 'today', label: 'النهارده', value: String(day.count), ring: 2, go: 'today',
-      hint: [day.totals.expense ? `مصروف ${money(day.totals.expense)}` : '', day.totals.income ? `دخل ${money(day.totals.income)}` : ''].filter(Boolean).join(' · '),
+      hint: [day.totals.expense ? `مصروف ${m(day.totals.expense)}` : '', day.totals.income ? `دخل ${m(day.totals.income)}` : ''].filter(Boolean).join(' · '),
     });
   }
   // «عدّى الحد»: categories past their monthly limit, until the month ends.
@@ -192,17 +185,24 @@ export function homeScreen(ctx, p, flash) {
       hint: limits.over.length === 1 ? `${limits.over[0].name} ${limits.over[0].percent}%` : limits.over.map((x) => x.name).join('، '),
     });
   }
-  // These two show only when there is something waiting, and stay until it is handled.
+  // These show only when there is something waiting, and stay until it is handled.
   for (const x of h.daily) {
     hubs.push({
-      id: `daily-${x.template.id}`, label: `توزيع النهارده`, value: money(x.perDay * x.days), ring: 3, alert: true,
+      id: `daily-${x.template.id}`, label: `توزيع النهارده`, value: m(x.perDay * x.days), ring: 3, alert: true,
       hint: x.days > 1 ? `${x.template.name} · فاتك ${x.days} أيام` : `${x.template.name} · حطيتهم؟`, go: 'daily', params: { id: x.template.id },
     });
   }
   if (h.borrowsCount) {
     hubs.push({
-      id: 'borrows', label: 'سلف لسه مارجعتش', value: money(h.borrowsTotal), ring: 1, alert: true,
+      id: 'borrows', label: 'سلف لسه مارجعتش', value: m(h.borrowsTotal), ring: 1, alert: true,
       hint: `${h.borrowsCount} للأدراج`, go: 'borrows', params: { back: 'home' },
+    });
+  }
+  const due = backupDue(d, today);
+  if (due) {
+    hubs.push({
+      id: 'backup', label: 'نسخة احتياطية', value: '!', ring: 1, alert: true, red: true, go: 'settings',
+      hint: d.settings.lastBackup ? `آخر نسخة من ${due} يوم` : 'لسه ماخدتش نسخة',
     });
   }
 
@@ -210,45 +210,29 @@ export function homeScreen(ctx, p, flash) {
   const open = Boolean(p.open) && p.hub === active.id;
   const minis = hubs.filter((x) => x !== active);
 
-  const breakdown = active.id === 'total' && open ? `
-    <div class="card">
-      <div class="row"><span>الكاش</span><b>${money(pic.cash)}</b></div>
-      ${pic.wallets.map((w) => `<div class="row"><span>${esc(w.name)}</span><b class="${w.balance < 0 ? 'neg' : ''}">${money(w.balance)}</b></div>`).join('')}
-      ${pic.safes.map((s) => `
-        <button class="row link" data-go="safe" data-id="${esc(s.id)}"><span>${esc(s.name)}</span><b>${money(s.total)}</b></button>
-        ${s.drawers.filter((g) => !g.units).map((g) => `<div class="row small sub"><span>${esc(g.name)}</span><span>${money(g.balance)}</span></div>`).join('')}`).join('')}
-      <div class="row total"><span>الإجمالي</span><b>${money(pic.total)}</b></div>
-      <p class="hint">الفلوس بتفضل محسوبة طول ما هي في أي مكان من دول، لحد ما تسجّل إنها اتصرفت.</p>
-    </div>` : '';
-
   const body = `
     ${hubStage(active, open)}
+    ${open ? hubCard(active, m) : ''}
     <div class="hubrow">${minis.map(hubMini).join('')}</div>
-    ${breakdown}
     ${pic.units.some((u) => u.qty > 0) ? `
     <div class="card">
       <div class="lbl">حاجات شايلها (مش داخلة في الإجمالي)</div>
-      ${pic.units.filter((u) => u.qty > 0).map((u) => `<button class="row link" data-go="drawer" data-id="${esc(u.id)}"><span>${esc(u.name)}: ${showQty(u.qty)} ${esc(u.unit)}</span><b>اتدفع فيهم ${money(u.cost)}</b></button>`).join('')}
+      ${pic.units.filter((u) => u.qty > 0).map((u) => `<button class="row link" data-go="drawer" data-id="${esc(u.id)}"><span>${esc(u.name)}: ${showQty(u.qty)} ${esc(u.unit)}</span><b>اتدفع فيهم ${m(u.cost)}</b></button>`).join('')}
     </div>` : ''}
-    ${backupDue(d, today) ? `
-    <button class="card item warn-card" data-go="settings">
-      <span class="row"><b>خد نسخة احتياطية</b><span>${d.settings.lastBackup ? `آخر نسخة من ${backupDue(d, today)} يوم` : 'لسه ماخدتش نسخة'}</span></span>
-      <span class="hint">لو الموبايل ضاع أو اتمسح، النسخة هي اللي بترجّع فلوسك.</span>
-    </button>` : ''}
-    ${h.soon.length ? `
+    ${!open && h.soon.length ? `
     <div class="card">
       <div class="lbl">قريب أو متأخر</div>
       ${h.soon.map((s) => `
         <button class="row link ${s.overdue ? 'neg' : ''}" data-go="${s.go}" ${Object.entries(s.params).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>
-          <span>${esc(s.label)} · ${showDate(s.date)}${s.overdue ? ' · متأخر' : ''}</span><b>${money(s.amount)}</b></button>`).join('')}
+          <span>${esc(s.label)} · ${showDate(s.date)}${s.overdue ? ' · متأخر' : ''}</span><b>${m(s.amount)}</b></button>`).join('')}
     </div>` : ''}
-    <details class="card">
-      <summary>الشهر ده: ${h.month.surplus < 0 ? 'عجز' : 'فايض'} ${money(Math.abs(h.month.surplus))}</summary>
-      <div class="row small"><span>دخل الشهر</span><span>${money(h.month.income)}</span></div>
-      <div class="row small"><span>مصروف الشهر</span><span>${money(h.month.expense)}</span></div>
-      <p class="hint">ده مش ربح. اللي بتشيله في الأدراج وسداد الديون وأقساط الجمعيات مش داخلين فيه.</p>
-    </details>`;
-  return page({ title: `أهلًا ${d.name}`, sub: 'مزنوق؟ لمّ حساباتك', tab: 'home', body, flash, help: 'home', calc: true });
+    <div class="card">
+      <div class="row"><b>الشهر ده: ${h.month.surplus < 0 ? 'عجز' : 'فايض'} ${m(Math.abs(h.month.surplus))}</b><button class="linkbtn" data-go="month">ملخص الشهر ←</button></div>
+      <div class="row small"><span>دخل الشهر</span><span>${m(h.month.income)}</span></div>
+      <div class="row small"><span>مصروف الشهر</span><span>${m(h.month.expense)}</span></div>
+    </div>`;
+  const eye = `<button type="button" class="calc-top" data-do="toggle-hide" aria-label="${hide ? 'إظهار الأرقام' : 'إخفاء الأرقام'}">${hide ? ICONS.eyeOff : ICONS.eye}</button>`;
+  return page({ title: `أهلًا ${d.name}`, sub: 'مزنوق؟ لمّ حساباتك', tab: 'home', body, flash, help: 'home', calc: true, tools: eye });
 }
 
 // ---------- More ----------
@@ -271,6 +255,7 @@ export function moreScreen(ctx, p, flash) {
       ${item({ go: 'wallets', title: 'الكاش والمحافظ', right: String(d.wallets.length), sub: 'الأسماء، خصم السحب، وإضافة محفظة' })}
       ${item({ go: 'categories', title: 'أوجه الصرف', right: String(d.categories.length), sub: 'الحد الشهري لكل وجه، وكشفه' })}
       ${item({ go: 'today', title: 'مراجعة النهارده', sub: 'كل اللي اتسجل في يوم، بند بند' })}
+      ${item({ go: 'month', title: 'ملخص الشهر', sub: 'دخلك ومصروفك وأكتر حاجات صرفت فيها' })}
       <button class="card item" data-calc=""><span class="row"><b>آلة حاسبة</b>${ICONS.calc}</span></button>
       <div class="sect">البرنامج</div>
       ${item({ go: 'settings', title: 'الإعدادات', sub: 'القفل، الاسم، الشكل، الأمثلة، النسخة الاحتياطية' })}
@@ -317,9 +302,22 @@ export function settingsScreen(ctx, p, flash) {
         <button class="linkbtn" data-do="reset-examples">اعرض الأمثلة من الأول تاني</button>
         <p class="hint">زرار «مثال» فوق في كل صفحة شغال على طول.</p>
       </div>
+      <button class="card item" data-go="restart">
+        <span class="row"><b>ابدأ من الأول</b><span>←</span></span>
+        <span class="hint">بداية جديدة بنفس الأسماء، أو امسح كل حاجة. الاتنين بينزّلوا نسخة احتياطية الأول.</span>
+      </button>
+      <div class="card">
+        <div class="lbl">حماية بياناتك</div>
+        ${{
+          true: '<p class="hint ok-text">✓ بياناتك محمية: المتصفح مش هيمسحها لوحده لو المساحة قلّت.</p>',
+          false: '<p class="hint">المتصفح لسه ماوافقش يحمي بياناتك من المسح التلقائي.</p><button class="btn2" data-do="protect-storage">احمي بياناتك</button>',
+          null: '<p class="hint">المتصفح ده مش بيقول إذا كان هيحافظ على البيانات. النسخة الاحتياطية هي الضمان.</p>',
+        }[String(ctx.persisted)]}
+        <p class="hint">مفيش حاجة بتمنع حد يمسح بيانات المتصفح بإيده أو ببرنامج تنظيف، فخد نسخة احتياطية كل أسبوع.</p>
+      </div>
       <div class="card">
         <div class="lbl">النسخة الاحتياطية</div>
-        <p class="hint">نزّل ملف فيه كل بياناتك، واستعيده لو غيرت الجهاز.</p>
+        <p class="hint">نزّل ملف فيه كل بياناتك، واستعيده لو غيرت الجهاز أو اتمسح. اسمه بيبدأ بـ maznouq-backup وبعده التاريخ.</p>
         <label class="check"><input type="checkbox" id="backup-photos" checked /> مع صور الفواتير</label>
         <button class="btn2" data-do="export-backup">نزّل النسخة الاحتياطية</button>
         ${d.settings.lastBackup ? `<p class="hint">آخر نسخة: ${showDate(d.settings.lastBackup)}</p>` : ''}
@@ -340,6 +338,13 @@ export function aboutScreen(ctx, p, flash) {
         <p class="hint">مزنوق مجاني للكل. EGYCODE بتبني برامج تساعد الناس تنظّم شغلها وفلوسها.</p></div>
       <div class="card"><div class="lbl">بياناتك فين؟</div>
         <p class="hint">كل بياناتك محفوظة على جهازك بس. مفيش سيرفر بيستلمها، ومابنبيعش أي بيانات.</p></div>
+      <div class="card share-card">
+        <div class="lbl">ابعت البرنامج لحد</div>
+        <p class="hint">صوّر الكود ده من موبايل تاني، أو ابعت اللينك على الواتساب.</p>
+        <div class="qr">${qrSvg(APP_URL)}</div>
+        <a class="btn" href="https://wa.me/?text=${encodeURIComponent(`جرّب مزنوق: برنامج مجاني ينظّم فلوسك، والبيانات على موبايلك بس. ${APP_URL}`)}" target="_blank" rel="noopener">ابعت على الواتساب</a>
+        <button class="btn2" data-do="share-app">شير أو انسخ اللينك</button>
+      </div>
       <button class="btn2" data-go="intro" data-i="0">شوف التعريف بالبرنامج تاني</button>`,
   });
 }

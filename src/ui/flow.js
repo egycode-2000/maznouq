@@ -6,7 +6,7 @@ import { cashOf, defaultPlace } from '../places.js';
 import { openBorrows } from '../reports.js';
 import { leftOf } from '../borrows.js';
 import { hasGoal } from '../moves.js';
-import { limitStatus } from '../reports.js';
+import { limitStatus, frequentExpenses } from '../reports.js';
 
 const TITLES = {
   expense: {
@@ -45,9 +45,24 @@ function trail(flow, ctx) {
   return parts.join(' · ');
 }
 
+// Expenses you repeat (same amount, place and category): one tap records them again.
+function repeatChips(flow, ctx) {
+  const d = flow.data;
+  if (flow.kind !== 'expense' || d.editOf || d.fromLocked || d.amount) return '';
+  const list = frequentExpenses(ctx.book, ctx.d, ctx.today);
+  if (!list.length) return '';
+  return `
+    <div class="lbl">بتتكرر كتير؟ اضغط تتسجل على طول</div>
+    <div class="repeat-row">${list.map((x) => `
+      <button type="button" class="repeat-chip" data-do="flow-repeat" data-amount="${x.amount / 100}" data-place="${esc(x.placeId)}" data-cat="${esc(x.categoryId)}">
+        <b>${money(x.amount)}</b><span>${esc(x.categoryName)} · ${esc(x.placeName)}</span>
+      </button>`).join('')}</div>`;
+}
+
 function amountStep(flow, ctx) {
   const d = flow.data;
   return `
+    ${repeatChips(flow, ctx)}
     <div class="amt-circle">
       <input id="flow-amount" class="amt-input" inputmode="none" autocomplete="off" placeholder="0" value="${esc(d.amount)}" data-autofocus ${d.amount ? 'data-fresh="1"' : ''} />
       <span>ج.م</span>

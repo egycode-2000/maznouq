@@ -2,7 +2,7 @@
 import {
   root, session, go, render, showError, shiftDay, openHelp, livePaint,
 } from './ctl/core.js';
-import { setupActions, readSetupInputs } from './ctl/setup.js';
+import { setupActions } from './ctl/setup.js';
 import { moneyActions } from './ctl/money.js';
 import { placeActions } from './ctl/places.js';
 import { duesActions } from './ctl/dues.js';
@@ -13,7 +13,7 @@ import { flowActions } from './ctl/flow.js';
 import { tick } from './sound.js';
 import { photoToDataUrl } from './ctl/places.js';
 import { pinMatches, shouldRelock, unlockWithBiometric } from './lock.js';
-import { loadValue, clearAll } from './storage.js';
+import { loadValue, clearAll, protectStorage } from './storage.js';
 import { photoKey } from './photos.js';
 import { freshDraft } from './ctl/core.js';
 import { importBackup } from './state.js';
@@ -54,7 +54,7 @@ async function wipeDevice() {
   }
   await clearAll();
   // Straight to the setup with the restore option: someone wiping a forgotten code already knows the app.
-  Object.assign(session, { unlocked: false, pin: '', pinFails: 0, lock: null, draft: freshDraft(), setupStep: 0, introDone: true });
+  Object.assign(session, { unlocked: false, pin: '', pinFails: 0, lock: null, draft: freshDraft(), obStep: 'name', introDone: true });
   session.route = { name: 'home', p: {} };
   session.flash = '✓ البيانات اتمسحت من الجهاز. رجّعها من النسخة الاحتياطية تحت، أو ابدأ من الأول';
   return render();
@@ -140,7 +140,7 @@ function handleLocal(target) {
 
 root.addEventListener('click', async (event) => {
   // The «تكة»: every round button and number key clicks, unless turned off in the settings.
-  if (session.ctx?.d.settings.sound && event.target.closest('.hub-big, .hub-br, .hub-lab, .hub-mini, .circle, .key, .navbtn.fab')) tick();
+  if (session.ctx?.d.settings.sound && event.target.closest('.hub-big, .hub-act, .hub-mini, .circle, .key, .repeat-chip, .navbtn.fab')) tick();
   const pinKey = event.target.closest('[data-pin]');
   if (pinKey) return typePin(pinKey.dataset.pin);
   if (event.target.closest('[data-unlock-bio]')) {
@@ -167,7 +167,6 @@ root.addEventListener('click', async (event) => {
     if (el.dataset.go === 'jam-new' && p.step === undefined) session.jamDraft = {};
     return go(el.dataset.go, p);
   }
-  readSetupInputs();
   const action = ACTIONS[el.dataset.do];
   if (!action) return undefined;
   try {
@@ -257,5 +256,8 @@ document.addEventListener('visibilitychange', () => {
     render();
   }
 });
+
+// Ask the browser once per opening to keep the data, so it is never cleared on its own when space runs low.
+protectStorage().then((result) => { session.persisted = result; });
 
 render();

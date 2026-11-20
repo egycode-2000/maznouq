@@ -39,6 +39,14 @@ export const flowActions = {
     return step(answer(f, value, session.ctx));
   },
   'flow-pick': (p) => step(answer(flow(), p.value, session.ctx)),
+  // A repeated expense: the same three answers as typing it, given at once, then recorded.
+  'flow-repeat': (p) => {
+    const f = flow();
+    if (document.getElementById('note')) f.data.note = v('note');
+    answer(f, p.amount, session.ctx);
+    answer(f, p.place, session.ctx);
+    return step(answer(f, p.cat, session.ctx));
+  },
   'flow-other': () => {
     flow().data.other = !flow().data.other;
     return render();

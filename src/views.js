@@ -1,12 +1,12 @@
 // All screens, keyed by route name. Each takes (ctx, params, flash) and returns the page HTML.
 // The screens live in src/ui/ by area; this file only lists them.
-import { setupScreen, STEPS, homeScreen, moreScreen, settingsScreen, aboutScreen } from './ui/home.js';
+import { homeScreen, moreScreen, settingsScreen, aboutScreen } from './ui/home.js';
 import {
   incomeScreen, sourceNewScreen, sourceEditScreen, transferScreen, templatesScreen, templateScreen, dailyScreen,
   logScreen, borrowsScreen, categoriesScreen,
 } from './ui/money.js';
 import { flowScreen } from './ui/flow.js';
-import { todayScreen, categoryScreen } from './ui/review.js';
+import { todayScreen, categoryScreen, monthScreen, restartScreen } from './ui/review.js';
 import { introScreen } from './ui/intro.js';
 import { safesScreen, safeScreen, drawerNewScreen, drawerScreen, walletsScreen } from './ui/safes.js';
 import { countScreen } from './ui/count.js';
@@ -16,7 +16,7 @@ import {
   accountsScreen, personNewScreen, personScreen, debtNewScreen, debtScreen, debtsReportScreen,
 } from './ui/accounts.js';
 
-export { setupScreen, STEPS, JAM_STEPS, lockScreen };
+export { JAM_STEPS, lockScreen };
 
 export const SCREENS = {
   home: homeScreen,
@@ -40,6 +40,8 @@ export const SCREENS = {
   // The intro again, from «عن مزنوق».
   intro: (ctx, p) => introScreen(Number(p.i ?? 0), { fromAbout: true }),
   today: todayScreen,
+  month: monthScreen,
+  restart: restartScreen,
   categories: categoriesScreen,
   safes: safesScreen,
   safe: safeScreen,

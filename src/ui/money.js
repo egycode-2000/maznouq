@@ -205,6 +205,7 @@ export function logScreen(ctx, p, flash) {
         <div class="card logrow ${r.reversal ? 'muted' : ''}">
           <div class="row"><b>${esc(r.memo)}</b><b>${money(r.amount)}</b></div>
           <div class="row small"><span>${showDate(r.date)}</span><span>${esc(r.from.join('، '))} ← ${esc(r.to.join('، '))}</span></div>
+          ${r.old ? '<span class="oldtag">فترة قديمة</span>' : ''}
           ${r.editedFrom !== null ? `<details class="edited"><summary>اتعدّلت</summary><span class="hint">كانت ${money(r.editedFrom)} قبل التعديل.</span></details>` : ''}
           ${r.note ? `<span class="hint">ملحوظة: ${esc(r.note)}</span>` : ''}
           ${photoBtn(ctx.d, r.id)}

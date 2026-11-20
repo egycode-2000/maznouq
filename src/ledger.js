@@ -114,11 +114,26 @@ export function balanceOf(book, accountId, asOf = null) {
 }
 
 // Income and expenses for a period, used for the monthly surplus or deficit.
+// «بداية جديدة»: book.period = { date, index } marks where the new period starts (index = position in entries).
+// A range that reaches the new start counts only entries from there on; a range wholly before it keeps its
+// full history. Every sum over a date range goes through this one rule.
+export function countsIn(book, entry, index, fromDate, toDate) {
+  if (entry.date < fromDate || entry.date > toDate) return false;
+  const p = book.period;
+  if (!p || toDate < p.date) return true;
+  return index >= p.index;
+}
+
+// Entries posted before «بداية جديدة» are closed: they stay, but cannot be undone or edited.
+export function isOldPeriod(book, entry) {
+  return Boolean(book.period) && book.entries.indexOf(entry) < book.period.index;
+}
+
 export function periodTotals(book, fromDate, toDate) {
   let income = 0;
   let expense = 0;
-  for (const entry of book.entries) {
-    if (entry.date < fromDate || entry.date > toDate) continue;
+  for (const [index, entry] of book.entries.entries()) {
+    if (!countsIn(book, entry, index, fromDate, toDate)) continue;
     for (const line of entry.lines) {
       const account = book.accounts.get(line.account);
       if (account.type === 'income') income += line.credit - line.debit;

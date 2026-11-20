@@ -642,3 +642,52 @@ html[data-theme="dark"] .circle small.near { color: #FFD166; }
 .intro .dots i { width: 9px; height: 9px; border-radius: 99px; background: var(--line); }
 .intro .dots i.on { width: 26px; background: var(--coral); }
 .intro .go { margin: 0 24px 28px; width: auto; }
+
+/* Repeated expenses: one-tap buttons above the number pad */
+.repeat-row { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
+.repeat-row::-webkit-scrollbar { display: none; }
+.repeat-chip {
+  flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 1.5px solid var(--line);
+  background: var(--card); color: var(--text); border-radius: 16px; padding: 8px 12px; font: inherit; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(60,30,55,.08);
+}
+.repeat-chip b { font-size: 15px; color: var(--plum-text); }
+.repeat-chip span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.repeat-chip:active { transform: translateY(1px); border-color: var(--coral); }
+
+/* The card that opens under the big circle: what it holds, then what you can do from it */
+.hub-card { gap: 6px; animation: fade .2s ease-out both; }
+.hub-card .row.sub span { padding-right: 12px; }
+.hub-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.hub-act {
+  display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--card);
+  color: var(--text); font: inherit; padding: 9px 10px; cursor: pointer; text-align: right;
+}
+.hub-act i {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; border: 4px solid var(--r2); background: var(--disc); color: var(--disc-text);
+  display: flex; align-items: center; justify-content: center; font-style: normal; font-weight: 800; font-size: 16px;
+}
+.hub-act:nth-child(5n+2) i { border-color: var(--r0); } .hub-act:nth-child(5n+3) i { border-color: var(--r1); }
+.hub-act:nth-child(5n+4) i { border-color: var(--r3); } .hub-act:nth-child(5n+5) i { border-color: var(--r4); }
+.hub-act span { display: flex; flex-direction: column; min-width: 0; }
+.hub-act b { font-size: 14px; }
+.hub-act small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hub-act:active { transform: translateY(1px); border-color: var(--coral); }
+.topcat { display: flex; flex-direction: column; gap: 4px; width: 100%; background: none; border: 0; border-bottom: 1px dashed var(--line); padding: 6px 0 8px; font: inherit; color: inherit; text-align: right; cursor: pointer; }
+.topcat:last-of-type { border-bottom: 0; }
+.hbar { height: 10px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+.hbar i { display: block; height: 100%; border-radius: 99px; background: var(--coral); }
+.hbar i.over { background: var(--danger); }
+.share-card .qr { display: flex; justify-content: center; padding: 6px 0; }
+.share-card .qr svg { width: 190px; height: 190px; background: #fff; border-radius: 12px; padding: 6px; }
+.share-card .qr svg path, .share-card .qr svg rect { shape-rendering: crispEdges; }
+.ok-text { color: var(--ok-text); font-weight: 700; }
+
+/* الإعداد خطوة خطوة */
+.obbar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.3); margin-top: 10px; overflow: hidden; }
+.obbar i { display: block; height: 100%; background: #FFF6EC; border-radius: 99px; transition: width .2s; }
+.line-row .day-val { width: 58px; }
+.onboard .circle .disc { font-size: 22px; }
+.danger-card { border-color: rgba(180,35,24,.35); }
+.btn2.danger { color: var(--danger); border-color: rgba(180,35,24,.45); }
+.oldtag { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--chip); border-radius: 99px; padding: 1px 8px; }
